@@ -1,0 +1,33 @@
+[package]
+name = "bookos-player"
+version = "0.1.0"
+description = "BookOS Music Player"
+authors = ["BookOS"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+id3 = "1"
+lofty = "0.21"
+walkdir = "2"
+base64 = "0.22"
+mime_guess = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = "z"
+panic = "abort"

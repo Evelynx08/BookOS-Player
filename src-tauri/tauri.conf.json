@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
+  "identifier": "com.bookos.player",
+  "productName": "BookOS Player",
+  "mainBinaryName": "bookos-player",
+  "version": "0.1.0",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; media-src 'self' data: blob: asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; font-src 'self' data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["/**", "$HOME/**", "**"],
+          "requireLiteralLeadingDot": false
+        }
+      }
+    },
+    "windows": [
+      {
+        "title": "BookOS Player",
+        "width": 1100,
+        "height": 700,
+        "minWidth": 780,
+        "minHeight": 500,
+        "decorations": false,
+        "transparent": true,
+        "resizable": true,
+        "visible": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": ["icons/icon.png"],
+    "targets": ["deb", "rpm"],
+    "publisher": "BookOS",
+    "category": "Music",
+    "linux": {
+      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"] },
+      "rpm": { "depends": ["webkit2gtk4.1", "gtk3"] }
+    }
+  }
+}
