@@ -284,10 +284,15 @@ function highlightRows() {
 }
 
 // ── Songs view ─────────────────────────────────────────────────────────────
+// Render por lotes: con bibliotecas grandes construir miles de filas de golpe
+// congela la UI. Pinta 250, cede el hilo y sigue; una búsqueda nueva cancela
+// el lote pendiente (token de generación).
+let _songsRenderGen = 0;
 function renderSongs() {
   const tbl=$('trackTable');
   const empty=$('emptyState');
   tbl.innerHTML='';
+  const gen=++_songsRenderGen;
 
   const filtered=searchQuery
     ? library.filter(t=>[t.title,t.artist,t.album].some(s=>(s||'').toLowerCase().includes(searchQuery)))
@@ -295,8 +300,19 @@ function renderSongs() {
 
   if(!filtered.length) { empty.classList.add('show'); tbl.style.display='none'; return; }
   empty.classList.remove('show'); tbl.style.display='';
-  filtered.forEach((t,i)=>tbl.appendChild(makeRow(t,i,filtered)));
-  highlightRows();
+
+  const CHUNK=250;
+  let i=0;
+  function renderChunk() {
+    if(gen!==_songsRenderGen) return;            // llegó un render más nuevo
+    const frag=document.createDocumentFragment();
+    const end=Math.min(i+CHUNK, filtered.length);
+    for(; i<end; i++) frag.appendChild(makeRow(filtered[i], i, filtered));
+    tbl.appendChild(frag);
+    if(i<filtered.length) requestAnimationFrame(renderChunk);
+    else highlightRows();
+  }
+  renderChunk();
 }
 
 // ── Albums view ────────────────────────────────────────────────────────────
@@ -634,10 +650,14 @@ $('pbArt').addEventListener('click',()=>{if(state.current_index>=0)$('immersive'
 $('immClose').addEventListener('click',()=>$('immersive').classList.remove('active'));
 
 // ── Search ─────────────────────────────────────────────────────────────────
+let _searchDebounce=null;
 $('searchInput').addEventListener('input',e=>{
   searchQuery=e.target.value.trim().toLowerCase();
-  renderSongs();
-  if(currentView!=='songs') showView('songs');
+  clearTimeout(_searchDebounce);
+  _searchDebounce=setTimeout(()=>{
+    renderSongs();
+    if(currentView!=='songs') showView('songs');
+  }, 120);
 });
 
 // ── Sidebar nav ────────────────────────────────────────────────────────────
