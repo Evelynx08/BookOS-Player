@@ -16,7 +16,11 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["/**", "$HOME/**", "**"],
+          "allow": [
+            "/**",
+            "$HOME/**",
+            "**"
+          ],
           "requireLiteralLeadingDot": false
         }
       }
@@ -37,13 +41,30 @@
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/icon.png"],
-    "targets": ["deb", "rpm"],
+    "icon": [
+      "icons/icon.png"
+    ],
+    "targets": [
+      "deb",
+      "rpm"
+    ],
     "publisher": "BookOS",
     "category": "Music",
     "linux": {
-      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"] },
-      "rpm": { "depends": ["webkit2gtk4.1", "gtk3"] }
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ],
+        "desktopTemplate": "linux/desktop.hbs"
+      },
+      "rpm": {
+        "depends": [
+          "webkit2gtk4.1",
+          "gtk3"
+        ],
+        "desktopTemplate": "linux/desktop.hbs"
+      }
     }
   }
 }
