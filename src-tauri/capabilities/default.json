@@ -24,8 +24,10 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "**" },
-        { "path": "$HOME/**" }
+        { "path": "$HOME/**" },
+        { "path": "/media/**" },
+        { "path": "/run/media/**" },
+        { "path": "/mnt/**" }
       ]
     }
   ]

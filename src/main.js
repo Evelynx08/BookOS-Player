@@ -278,7 +278,7 @@ function makeRow(track, index, tracks, cols='4col') {
 function highlightRows() {
   const cur=state.queue[state.current_index];
   document.querySelectorAll('.tr').forEach(r=>{
-    const playing=cur&&r.dataset.path===cur.path;
+    const playing=!!(cur&&r.dataset.path===cur.path);
     r.classList.toggle('playing', playing);
   });
 }
