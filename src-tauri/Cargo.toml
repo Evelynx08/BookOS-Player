@@ -15,11 +15,16 @@ tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
-id3 = "1"
 lofty = "0.21"
 walkdir = "2"
 base64 = "0.22"
 mime_guess = "2"
+log = "0.4"
+# MPRIS: el reproductor no publicaba nada en D-Bus y ni la isla ni la BookBar
+# ni el applet de Plasma lo veian.
+zbus = { version = "5", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["sync"] }
+futures-util = "0.3"
 
 [features]
 default = ["custom-protocol"]
@@ -29,5 +34,7 @@ custom-protocol = ["tauri/custom-protocol"]
 lto = true
 codegen-units = 1
 strip = true
-opt-level = "z"
+# opt-level 3 y no "z": el escaneo de la biblioteca (lofty + base64) es trabajo
+# de CPU, y optimizar por tamaño lo hacía notablemente más lento.
+opt-level = 3
 panic = "abort"

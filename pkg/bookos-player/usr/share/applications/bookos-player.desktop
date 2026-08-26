@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Reproductor - Player
+Comment=BookOS Player
+Exec=bookos-player
+Icon=bookos-player
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=bookos-player

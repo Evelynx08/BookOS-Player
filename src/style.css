@@ -1,719 +1,3537 @@
 /* ── Reset ─────────────────────────────────────────────────────── */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:transparent}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Roboto,sans-serif;
-  letter-spacing:-.01em;
-  -webkit-user-select:none;user-select:none;
-  -webkit-tap-highlight-color:transparent;
-  background:transparent;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Roboto, sans-serif;
+  letter-spacing: -.01em;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
 }
 
 /* ── Tokens ─────────────────────────────────────────────────────── */
 /* Default = DARK (BookOS HIG dark). `.light-mode` overrides below.   */
-:root{
-  /* live album tint — set by JS via applyDyn(); the app's --accent */
-  --dyn:#7c5cfc;
-  --dyn-rgb:124,92,252;
-  --accent:var(--dyn);
+:root {
+  /* Tinte del álbum que suena — lo escribe applyDyn() como estilo inline en
+     #app. Sin carátula no hay inline y manda esto: --blue es el acento que
+     publica la paleta de BookOS Settings, así que la app va a juego con el
+     escritorio. El hex final es sólo la red por si no hay paleta instalada. */
+  --dyn: var(--blue, #7c5cfc);
+  --dyn-rgb: 124, 92, 252;
+  --accent: var(--dyn);
 
-  --bg:#000000;
-  --card:#1c1c1e;
-  --text:#ffffff;
-  --text-2:#8e8e93;
-  --divider:rgba(255,255,255,.08);
-  --border:rgba(255,255,255,.06);
-  --hover:rgba(255,255,255,.06);
-  --active:rgba(255,255,255,.10);
-  --surface:rgba(255,255,255,.08);
-  --toggle-off:#48484a;
-  --danger:#ff453a;
-  --success:#30d158;
+  --text: #ffffff;
+  --text-2: #8e8e93;
+  --divider: rgba(255, 255, 255, .08);
+  --border: rgba(255, 255, 255, .06);
+  --hover: rgba(255, 255, 255, .06);
+  --active: rgba(255, 255, 255, .10);
+  --surface: rgba(255, 255, 255, .08);
+  --toggle-off: #48484a;
+  --danger: #ff453a;
+  --success: #30d158;
 
   /* legacy aliases still referenced across the sheet */
-  --tx:var(--text);
-  --tx2:var(--text-2);
-  --tx3:var(--text-2);
-  --div:var(--divider);
+  --tx: var(--text);
+  --tx2: var(--text-2);
+  --tx3: var(--text-2);
+  --div: var(--divider);
 
   /* selected-state fill (tint at 10-12%) */
-  --sel:color-mix(in srgb, var(--accent) 12%, transparent);
-  --sel-soft:color-mix(in srgb, var(--accent) 10%, transparent);
+  --sel: color-mix(in srgb, var(--accent) 12%, transparent);
+  --sel-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+
+  /* secondary/tertiary hues derived from --accent — used for gradients so the
+     player feels lively instead of flat, while staying anchored to whatever
+     accent (manual or dynamic-from-cover) is active. bookos-palette.js may
+     override these with the wallpaper's own secondary/tertiary tones. */
+  --accent-2: color-mix(in srgb, var(--accent) 55%, #ff5ec8 45%);
+  --accent-3: color-mix(in srgb, var(--accent) 55%, #22d3ee 45%);
 
   /* shadows — dark = none on resting surfaces */
-  --sh-rest:none;
-  --sh-pop:0 6px 22px rgba(0,0,0,.45);
-  --sh-modal:0 20px 56px rgba(0,0,0,.55);
+  --sh-rest: none;
+  --sh-pop: 0 6px 22px rgba(0, 0, 0, .45);
+  --sh-modal: 0 20px 56px rgba(0, 0, 0, .55);
 
-  --ease:cubic-bezier(.4,0,.2,1);
-  --ease-spring:cubic-bezier(.34,1.4,.64,1);
+  /* Easings. Las curvas nativas de CSS son demasiado flojas: no tienen el
+     punch que hace que una animación se sienta intencionada. --ease queda
+     como alias de --ease-out para no romper las transiciones ya escritas. */
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --ease-in-out: cubic-bezier(.77, 0, .175, 1);
+  --ease-drawer: cubic-bezier(.32, .72, 0, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --ease: var(--ease-out);
 
-  --sb-w:236px;
+  /* Duraciones. Nada de UI por encima de 300ms. */
+  --d-press: 120ms;
+  --d-hover: 150ms;
+  --d-pop: 200ms;
+  --d-panel: 280ms;
+  --d-view: 180ms;
+
+  --sb-w: 236px;
+
+  /* Geometría del dock. La holgura la consumen .main-content, .sidebar y
+     .queue-panel: antes eran tres 84px sueltos que había que cuadrar a mano
+     cada vez que la barra cambiaba de alto. */
+  /* Todo el reproductor escala con el viewport en vez de vivir en píxeles
+     fijos: en un portátil de 3K (que además suele ir al 200%, o sea ~1440
+     CSS px) la barra y el inmersivo se quedaban diminutos en medio de la
+     pantalla. clamp() da una curva continua, sin saltos de breakpoint. */
+  --pb-h: clamp(82px, 9vh, 100px);
+  --pb-clear: calc(var(--pb-h) + 12px);
+
+  /* Tintes del acento para pistas de slider y estados activos. Todo lo del
+     reproductor sale de aquí, así que el color de Ajustes de BookOS (o el de
+     la carátula) manda sin tocar una regla más. */
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
+  --accent-track: color-mix(in srgb, var(--accent) 18%, transparent);
+  --track-r: 999px;
 }
 
-.light-mode{
-  --bg:#f2f2f7;
-  --card:#ffffff;
-  --text:#000000;
-  --text-2:#8e8e93;
-  --divider:rgba(0,0,0,.08);
-  --border:rgba(0,0,0,.10);
-  --hover:rgba(0,0,0,.04);
-  --active:rgba(0,0,0,.08);
-  --surface:rgba(0,0,0,.06);
-  --toggle-off:#e0e0e0;
-  --danger:#ff3b30;
-  --success:#34c759;
+/* --bg/--card viven en un contrato de clase separado, EL MISMO que usa
+   bookos-palette.js para toda la app: claro en :root por defecto,
+   `:root.dark-mode` para el oscuro. Así, cuando hay paleta dinámica activa,
+   su hoja (que se inyecta después, en el <head>) pisa estas dos variables en
+   ambos modos y la app queda teñida con el fondo — sin esto, el fondo
+   siempre se quedaba en el color fijo de la app, nunca en el de la paleta.
+   El resto de las variables (texto, divisores, etc.) siguen con la
+   convención propia de la app (`.light-mode` en #app), que no choca con
+   nada de la paleta compartida. */
+:root {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+}
 
-  --sh-rest:0 1px 3px rgba(0,0,0,.05);
-  --sh-pop:0 6px 22px rgba(0,0,0,.18);
-  --sh-modal:0 20px 56px rgba(0,0,0,.30);
+:root.dark-mode {
+  --bg: #000000;
+  --card: #1c1c1e;
+}
+
+.light-mode {
+  --text: #000000;
+  --text-2: #8e8e93;
+  --divider: rgba(0, 0, 0, .08);
+  --border: rgba(0, 0, 0, .10);
+  --hover: rgba(0, 0, 0, .04);
+  --active: rgba(0, 0, 0, .08);
+  --surface: rgba(0, 0, 0, .06);
+  --toggle-off: #e0e0e0;
+  --danger: #ff3b30;
+  --success: #34c759;
+
+  --sh-rest: 0 1px 3px rgba(0, 0, 0, .05);
+  --sh-pop: 0 6px 22px rgba(0, 0, 0, .18);
+  --sh-modal: 0 20px 56px rgba(0, 0, 0, .30);
 }
 
 /* ── App root ──────────────────────────────────────────────────── */
-#app{
-  width:100vw;height:100vh;
-  position:relative;
-  background:var(--bg);
-  border-radius:20px;
-  border:1px solid var(--border);
-  color:var(--text);
-  display:flex;flex-direction:column;
-  overflow:hidden;
-  transition:background .28s var(--ease),border-color .28s var(--ease);
+#app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  background: var(--bg);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: background .28s var(--ease), border-color .28s var(--ease);
+}
+
+/* Maximizada: pegada a los bordes de la pantalla, sin esquinas ni borde —
+   si no, algunos compositores dejan un hilo de escritorio visible en el
+   borde (las "franjas" que se ven como si no estuviera del todo a pantalla
+   completa). */
+#app.maximized {
+  border-radius: 0;
+  border-color: transparent;
 }
 
 /* ── Titlebar — native-minimal ─────────────────────────────────── */
-.titlebar{
-  height:44px;flex-shrink:0;
-  display:flex;align-items:center;justify-content:space-between;
-  padding:0 12px 0 12px;
-  background:transparent;
-  position:relative;z-index:50;
+.titlebar {
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 0 12px;
+  background: transparent;
+  position: relative;
+  z-index: 50;
 }
-.tb-left{display:flex;align-items:center;gap:6px}
-.tb-right{display:flex;align-items:center;gap:4px}
 
-.tb-btn{
-  width:30px;height:28px;background:transparent;
-  border:none;
-  cursor:pointer;color:var(--text-2);border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .12s var(--ease),color .12s var(--ease);
+.tb-left {
+  display: flex;
+  align-items: center;
+  gap: 6px
 }
-.tb-btn:hover{background:var(--hover);color:var(--text)}
-.tb-btn.close-btn:hover{background:var(--danger);color:#fff}
+
+.tb-right {
+  display: flex;
+  align-items: center;
+  gap: 4px
+}
+
+.tb-btn {
+  width: 30px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+
+.tb-btn:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.tb-btn.close-btn:hover {
+  background: var(--danger);
+  color: #fff
+}
 
 /* ── Body ──────────────────────────────────────────────────────── */
-.body-wrap{
-  flex:1;min-height:0;
-  display:flex;position:relative;
+.body-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
 }
 
 /* ── Sidebar — transparent rail holding HIG grouped cards ──────── */
-.sidebar{
-  position:absolute;
-  left:14px;top:4px;bottom:150px;
-  width:var(--sb-w);
-  background:transparent;
-  overflow:hidden;
-  z-index:30;
-  transition:transform .28s var(--ease),opacity .18s var(--ease);
+.sidebar {
+  position: absolute;
+  left: 14px;
+  top: 4px;
+  bottom: var(--pb-clear);
+  width: var(--sb-w);
+  background: transparent;
+  overflow: hidden;
+  z-index: 30;
+  transition: transform .28s var(--ease), opacity .18s var(--ease);
 }
-.sidebar.collapsed{transform:translateX(calc(-100% - 24px));opacity:0;pointer-events:none}
-.sidebar-scroll{
-  height:100%;padding:2px 2px 12px;
-  overflow-y:auto;overflow-x:hidden;
-  display:flex;flex-direction:column;gap:14px;
+
+.sidebar.collapsed {
+  transform: translateX(calc(-100% - 24px));
+  opacity: 0;
+  pointer-events: none
 }
-.sidebar-scroll::-webkit-scrollbar{width:3px}
-.sidebar-scroll::-webkit-scrollbar-thumb{background:var(--divider);border-radius:2px}
+
+.sidebar-scroll {
+  height: 100%;
+  padding: 2px 2px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 3px
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
+}
 
 /* Search field at top of sidebar */
-.sb-search-wrap{
-  display:flex;align-items:center;gap:8px;
-  background:var(--surface);
-  border-radius:12px;padding:0 12px;height:36px;flex-shrink:0;
-  transition:background .15s var(--ease);
+.sb-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0 12px;
+  height: 36px;
+  flex-shrink: 0;
+  transition: background .15s var(--ease);
 }
-.sb-search-icon{color:var(--text-2);flex-shrink:0}
-.sb-search{
-  background:none;border:none;outline:none;
-  color:var(--text);font-size:14px;width:100%;
-  font-family:inherit;-webkit-user-select:text;user-select:text;
+
+.sb-search-icon {
+  color: var(--text-2);
+  flex-shrink: 0
 }
-.sb-search::placeholder{color:var(--text-2)}
+
+.sb-search {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  font-family: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.sb-search::placeholder {
+  color: var(--text-2)
+}
 
 /* Grouped nav cards */
-.sb-card{
-  background:var(--card);
-  border-radius:22px;
-  box-shadow:var(--sh-rest);
-  overflow:hidden;
-  padding:6px;
+.sb-card {
+  background: var(--card);
+  border-radius: 22px;
+  box-shadow: var(--sh-rest);
+  overflow: hidden;
+  padding: 6px;
 }
-.sb-section{display:flex;flex-direction:column}
-.sb-section-title{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:8px 10px 6px;
-  font-size:12px;font-weight:500;color:var(--text-2);
-  letter-spacing:.02em;
-}
-.sb-add-btn{
-  width:22px;height:22px;background:none;border:none;cursor:pointer;
-  color:var(--text-2);border-radius:6px;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .12s var(--ease),color .12s var(--ease);
-}
-.sb-add-btn:hover{background:var(--hover);color:var(--text)}
 
-.sb-item{
-  display:flex;align-items:center;gap:11px;
-  width:100%;padding:10px 11px;border-radius:14px;
-  background:none;border:none;cursor:pointer;
-  color:var(--text);font-size:14px;font-weight:500;
-  text-align:left;font-family:inherit;
-  transition:background .12s var(--ease),color .12s var(--ease);
+.sb-section {
+  display: flex;
+  flex-direction: column
 }
-.sb-item:hover{background:var(--hover)}
-.sb-item.active{background:var(--sel-soft);color:var(--accent)}
-.sb-item svg{flex-shrink:0;color:var(--text-2)}
-.sb-item.active svg{color:var(--accent)}
 
-.sb-pl-item{
-  display:flex;align-items:center;gap:10px;
-  width:100%;padding:9px 11px;border-radius:14px;
-  background:none;border:none;cursor:pointer;
-  color:var(--text);font-size:14px;font-weight:500;
-  text-align:left;font-family:inherit;
-  transition:background .12s var(--ease),color .12s var(--ease);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+.sb-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em;
 }
-.sb-pl-item svg{flex-shrink:0;color:var(--text-2)}
-.sb-pl-item:hover{background:var(--hover)}
-.sb-pl-item.active{background:var(--sel-soft);color:var(--accent)}
-.sb-pl-item.active svg{color:var(--accent)}
+
+.sb-add-btn {
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+
+.sb-add-btn:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.sb-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  font-family: inherit;
+  transition: background .12s var(--ease), color .12s var(--ease), transform .1s var(--ease);
+}
+
+.sb-item:hover {
+  background: var(--hover)
+}
+
+.sb-item:active {
+  transform: scale(.98)
+}
+
+.sb-item.active {
+  background: var(--sel-soft);
+  color: var(--accent)
+}
+
+.sb-item svg {
+  flex-shrink: 0;
+  color: var(--text-2)
+}
+
+.sb-item.active svg {
+  color: var(--accent)
+}
+
+.sb-pl-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  font-family: inherit;
+  transition: background .12s var(--ease), color .12s var(--ease), transform .1s var(--ease);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-pl-item svg {
+  flex-shrink: 0;
+  color: var(--text-2)
+}
+
+.sb-pl-item:hover {
+  background: var(--hover)
+}
+
+.sb-pl-item:active {
+  transform: scale(.98)
+}
+
+/* Cada lista lleva su color propio (pl.color); si no tiene, hereda el acento.
+   updatePlaylistNav() escribe --pl-item-accent inline en cada botón. */
+.sb-pl-item.active {
+  background: color-mix(in srgb, var(--pl-item-accent, var(--accent)) 10%, transparent);
+  color: var(--pl-item-accent, var(--accent))
+}
+
+.sb-pl-item.active svg {
+  color: var(--pl-item-accent, var(--accent))
+}
+
+/* Punto de color: la única pista de color en estado de reposo, para que la
+   lista se reconozca de un vistazo sin gritar. */
+.sb-pl-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  margin-left: auto;
+  background: var(--pl-item-accent, var(--accent));
+  opacity: .85;
+}
+
+.sb-pl-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-pl-item.dragging {
+  opacity: .4
+}
+
+.sb-pl-item.drag-over {
+  box-shadow: 0 -2px 0 0 var(--pl-item-accent, var(--accent)) inset
+}
+
+.sb-pl-item.drag-over.drop-after {
+  box-shadow: 0 2px 0 0 var(--pl-item-accent, var(--accent)) inset
+}
 
 /* ── Main content ──────────────────────────────────────────────── */
-.main-content{
-  flex:1;min-width:0;
-  margin-left:calc(var(--sb-w) + 30px);
-  margin-right:14px;
-  margin-bottom:150px;
-  overflow:hidden;display:flex;flex-direction:column;
-  position:relative;
+.main-content {
+  flex: 1;
+  min-width: 0;
+  margin-left: calc(var(--sb-w) + 30px);
+  margin-right: 14px;
+  margin-bottom: var(--pb-clear);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
-#app:has(.sidebar.collapsed) .main-content{margin-left:16px}
 
-.view{display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden}
-.view.active{display:flex;animation:fadeIn .22s cubic-bezier(.25,.46,.45,.94)}
-@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-
-.view-header{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:16px 2px 12px;flex-shrink:0;
+#app:has(.sidebar.collapsed) .main-content {
+  margin-left: 16px
 }
-.view-title{font-size:22px;font-weight:700;letter-spacing:-.3px;color:var(--text)}
-.view-actions{display:flex;gap:8px}
+
+.view {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden
+}
+
+.view.active {
+  display: flex;
+  animation: fadeIn var(--d-view) var(--ease-out)
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+.view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 2px 12px;
+  flex-shrink: 0;
+}
+
+.view-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  color: var(--text)
+}
+
+.view-actions {
+  display: flex;
+  gap: 8px
+}
 
 /* ── Buttons ───────────────────────────────────────────────────── */
-.btn-primary{
-  padding:8px 18px;border-radius:12px;
-  background:var(--accent);border:none;cursor:pointer;
-  color:#fff;font-size:13px;font-weight:600;
-  font-family:inherit;transition:filter .12s var(--ease),transform .08s var(--ease);
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: filter .12s var(--ease), transform .08s var(--ease);
 }
-.btn-primary:hover{filter:brightness(1.1)}
-.btn-primary:active{transform:scale(.97)}
 
-.btn-action{
-  display:flex;align-items:center;gap:6px;
-  padding:8px 15px;border-radius:12px;
-  background:var(--hover);
-  border:none;
-  cursor:pointer;color:var(--text);font-size:13px;font-weight:600;
-  font-family:inherit;transition:background .12s var(--ease),color .12s var(--ease);
+.btn-primary:hover {
+  filter: brightness(1.1)
 }
-.btn-action:hover{background:var(--active)}
-.btn-action svg{color:var(--text-2)}
-.btn-action.accent{background:var(--sel);color:var(--accent)}
-.btn-action.accent svg{color:var(--accent)}
-.btn-action.accent:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)}
-.btn-action.danger{color:var(--danger)}
-.btn-action.danger svg{color:var(--danger)}
-.btn-action.danger:hover{background:color-mix(in srgb,var(--danger) 14%,transparent)}
 
-.btn-sec{
-  padding:8px 18px;border-radius:12px;
-  background:var(--hover);border:none;
-  cursor:pointer;color:var(--text);font-size:13px;font-weight:600;
-  font-family:inherit;transition:background .12s var(--ease);
+.btn-primary:active {
+  transform: scale(.97)
 }
-.btn-sec:hover{background:var(--active)}
+
+.btn-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: 12px;
+  background: var(--hover);
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background var(--d-hover) var(--ease), color var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+.btn-action:hover {
+  background: var(--active)
+}
+
+.btn-action:active {
+  transform: scale(.97)
+}
+
+.btn-action svg {
+  color: var(--text-2)
+}
+
+.btn-action.accent {
+  background: var(--sel);
+  color: var(--accent)
+}
+
+.btn-action.accent svg {
+  color: var(--accent)
+}
+
+.btn-action.accent:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent)
+}
+
+.btn-action.danger {
+  color: var(--danger)
+}
+
+.btn-action.danger svg {
+  color: var(--danger)
+}
+
+.btn-action.danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent)
+}
+
+.btn-sec {
+  padding: 8px 18px;
+  border-radius: 12px;
+  background: var(--hover);
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+.btn-sec:hover {
+  background: var(--active)
+}
+
+.btn-sec:active {
+  transform: scale(.97)
+}
 
 /* ── Track table ───────────────────────────────────────────────── */
-.track-table-head{
-  display:grid;
-  grid-template-columns:46px 1fr 180px 180px 52px;
-  padding:4px 20px 6px;
-  font-size:12px;font-weight:500;color:var(--text-2);
-  letter-spacing:.02em;
-  border-bottom:.5px solid var(--divider);flex-shrink:0;
+.track-table-head {
+  display: grid;
+  grid-template-columns: 46px 1fr 180px 180px 52px 28px;
+  padding: 4px 20px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em;
+  border-bottom: .5px solid var(--divider);
+  flex-shrink: 0;
 }
-#view-album-detail .track-table-head{grid-template-columns:46px 1fr 52px}
-#view-artist-detail .track-table-head{grid-template-columns:46px 1fr 180px 52px}
-#view-playlist .track-table-head{grid-template-columns:46px 1fr 180px 180px 52px}
 
-.track-table{
-  flex:1;overflow-y:auto;padding:6px;margin-top:8px;
-  background:var(--card);border-radius:25px;
-  box-shadow:var(--sh-rest);
+/* Cabeceras ordenables: click para alternar asc/desc, flecha en la activa */
+.track-table-head [data-sort].sortable {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color .12s var(--ease);
 }
-.track-table::-webkit-scrollbar{width:4px}
-.track-table::-webkit-scrollbar-thumb{background:var(--divider);border-radius:2px}
 
-.tr{
-  display:grid;
-  grid-template-columns:46px 1fr 180px 180px 52px;
-  align-items:center;height:52px;
-  padding:0 14px;border-radius:14px;
-  cursor:pointer;transition:background .12s var(--ease);position:relative;
+.track-table-head [data-sort].sortable:hover {
+  color: var(--text)
 }
-.tr:hover{background:var(--hover)}
-.tr.playing{background:var(--sel)}
-.tr.playing .tr-title{color:var(--accent)}
-.tr.playing .tr-num,.tr:hover .tr-num{display:none}
-.tr.playing .tr-eq{display:flex}
-.tr:hover .tr-play-icon{display:flex}
-.tr.playing:hover .tr-play-icon{display:none}
-.tr.playing:hover .tr-eq{display:flex}
-.tr.tr-2col{grid-template-columns:46px 1fr 52px}
-.tr.tr-3col{grid-template-columns:46px 1fr 180px 52px}
 
-.tr-num{font-size:13px;color:var(--text-2);text-align:center}
-.tr-play-icon{display:none;align-items:center;justify-content:center;color:var(--text)}
-.tr-eq{display:none;align-items:center;justify-content:center;gap:2px}
-.eq-bar{width:3px;background:var(--accent);border-radius:2px;animation:eqB .9s ease-in-out infinite}
-.eq-bar:nth-child(1){height:9px}
-.eq-bar:nth-child(2){height:13px;animation-delay:.13s}
-.eq-bar:nth-child(3){height:7px;animation-delay:.26s}
-@keyframes eqB{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
-.tr.playing.paused .eq-bar{animation-play-state:paused}
+.track-table-head [data-sort].sorted {
+  color: var(--accent);
+  font-weight: 700;
+  /* pastilla tenue detrás de la columna activa: incluso cuando el orden no
+     cambia (columnas sin metadatos), el click siempre da una respuesta visible */
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 7px;
+  padding: 2px 7px;
+  margin: -2px -7px;
+}
 
-.tr-title-wrap{display:flex;align-items:center;gap:12px;min-width:0}
-.tr-cover{width:38px;height:38px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--surface)}
-.tr-cover-ph{width:38px;height:38px;border-radius:8px;background:var(--surface);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-2)}
-.tr-title{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tr-artist,.tr-album{font-size:13px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tr.playing .tr-artist,.tr.playing .tr-album{color:color-mix(in srgb,var(--accent) 70%,transparent)}
-.tr-dur{font-size:13px;color:var(--text-2);text-align:right;font-variant-numeric:tabular-nums}
+.track-table-head [data-sort].sortable::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4.5px solid transparent;
+  border-right: 4.5px solid transparent;
+  border-bottom: 5.5px solid currentColor;
+  opacity: 0;
+  transition: opacity .12s var(--ease), transform .15s var(--ease);
+}
+
+.track-table-head [data-sort].sortable:hover::after {
+  opacity: .4
+}
+
+.track-table-head [data-sort].sorted::after {
+  opacity: 1
+}
+
+.track-table-head [data-sort].sorted.desc::after {
+  transform: rotate(180deg)
+}
+
+/* La columna de duración es un icono: la flecha va pegada a su derecha */
+.track-table-head .th-dur[data-sort].sortable {
+  justify-content: flex-end
+}
+
+#view-album-detail .track-table-head {
+  grid-template-columns: 46px 1fr 52px 28px
+}
+
+#view-artist-detail .track-table-head {
+  grid-template-columns: 46px 1fr 180px 52px 28px
+}
+
+#view-playlist .track-table-head {
+  grid-template-columns: 46px 1fr 180px 180px 52px 28px 28px
+}
+
+#view-playlist .tr {
+  grid-template-columns: 46px 1fr 180px 180px 52px 28px 28px
+}
+
+.track-table {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  margin-top: 8px;
+  background: var(--card);
+  border-radius: 25px;
+  box-shadow: var(--sh-rest);
+}
+
+.track-table::-webkit-scrollbar {
+  width: 4px
+}
+
+.track-table::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
+}
+
+.tr {
+  display: grid;
+  grid-template-columns: 46px 1fr 180px 180px 52px 28px;
+  align-items: center;
+  height: 52px;
+  padding: 0 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background .12s var(--ease), transform .1s var(--ease);
+  position: relative;
+}
+
+.tr:hover {
+  background: var(--hover)
+}
+
+.tr:active {
+  transform: scale(.99)
+}
+
+.tr.playing {
+  background: var(--sel)
+}
+
+.tr.playing .tr-title {
+  color: var(--accent)
+}
+
+.tr.playing .tr-num,
+.tr:hover .tr-num {
+  display: none
+}
+
+.tr.playing .tr-eq {
+  display: flex
+}
+
+.tr:hover .tr-play-icon {
+  display: flex
+}
+
+.tr.playing:hover .tr-play-icon {
+  display: none
+}
+
+.tr.playing:hover .tr-eq {
+  display: flex
+}
+
+.tr.tr-2col {
+  grid-template-columns: 46px 1fr 52px 28px
+}
+
+.tr.tr-3col {
+  grid-template-columns: 46px 1fr 180px 52px 28px
+}
+
+.tr-num {
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: center
+}
+
+.tr-play-icon {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--text)
+}
+
+.tr-eq {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 2px
+}
+
+.eq-bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: eqB .9s ease-in-out infinite
+}
+
+.eq-bar:nth-child(1) {
+  height: 9px
+}
+
+.eq-bar:nth-child(2) {
+  height: 13px;
+  animation-delay: .13s;
+  background: var(--accent-2)
+}
+
+.eq-bar:nth-child(3) {
+  height: 7px;
+  animation-delay: .26s;
+  background: var(--accent-3)
+}
+
+@keyframes eqB {
+
+  0%,
+  100% {
+    transform: scaleY(.35)
+  }
+
+  50% {
+    transform: scaleY(1)
+  }
+}
+
+.tr.playing.paused .eq-bar {
+  animation-play-state: paused
+}
+
+.tr-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0
+}
+
+.tr-cover {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface)
+}
+
+.tr-cover-ph {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--surface);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2)
+}
+
+.tr-title {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.tr-artist,
+.tr-album {
+  font-size: 13px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.tr.playing .tr-artist,
+.tr.playing .tr-album {
+  color: color-mix(in srgb, var(--accent) 70%, transparent)
+}
+
+.tr-dur {
+  font-size: 13px;
+  color: var(--text-2);
+  text-align: right;
+  font-variant-numeric: tabular-nums
+}
+
+.tr-like {
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .12s var(--ease), color .12s var(--ease), transform .08s var(--ease);
+}
+
+.tr:hover .tr-like,
+.tr-like.active {
+  opacity: 1
+}
+
+.tr-like:hover {
+  color: var(--text)
+}
+
+.tr-like.active {
+  color: var(--accent-2)
+}
+
+.tr-like.active:hover {
+  filter: brightness(1.15)
+}
+
+.tr-like:active {
+  transform: scale(.8)
+}
+
+.tr-like.pop svg {
+  animation: likePop .28s var(--ease-spring)
+}
+
+@keyframes likePop {
+  0% {
+    transform: scale(0)
+  }
+
+  55% {
+    transform: scale(1.35)
+  }
+
+  100% {
+    transform: scale(1)
+  }
+}
+
+/* Quitar de la lista — solo aparece en la vista de una lista */
+.tr-remove {
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity .12s var(--ease), background .12s var(--ease), color .12s var(--ease), transform .08s var(--ease);
+}
+
+.tr:hover .tr-remove {
+  opacity: 1
+}
+
+.tr-remove:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger)
+}
+
+.tr-remove:active {
+  transform: scale(.8)
+}
+
+/* Reordenar por drag & drop (solo en la vista de una lista) */
+#view-playlist .tr {
+  cursor: grab
+}
+
+#view-playlist .tr:active {
+  cursor: grabbing
+}
+
+.tr.dragging {
+  opacity: .4
+}
+
+/* Indicador de destino: una línea de 2px arriba o abajo según la mitad del
+   cursor, en vez de teñir toda la fila. Dice dónde va a caer, no "esta fila". */
+.tr.drag-over::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--pl-accent, var(--accent));
+  pointer-events: none;
+}
+
+.tr.drag-over.drop-before::after {
+  top: -1px
+}
+
+.tr.drag-over.drop-after::after {
+  bottom: -1px
+}
 
 /* ── Empty state ───────────────────────────────────────────────── */
-.empty-state{
-  display:none;flex-direction:column;align-items:center;
-  justify-content:center;flex:1;gap:8px;padding-bottom:60px;
+.empty-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 8px;
+  padding-bottom: 60px;
 }
-.empty-state.show{display:flex}
-.empty-art{margin-bottom:8px;opacity:.35;color:var(--text-2)}
-.empty-title{font-size:17px;font-weight:600;color:var(--text)}
-.empty-sub{font-size:13px;color:var(--text-2);margin-bottom:6px}
+
+.empty-state.show {
+  display: flex
+}
+
+.empty-art {
+  margin-bottom: 8px;
+  opacity: .35;
+  color: var(--text-2)
+}
+
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text)
+}
+
+.empty-sub {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 6px
+}
+
+/* ── Home ──────────────────────────────────────────────────────── */
+.home-wrap {
+  padding: 4px 2px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px
+}
+
+.resume-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 25px;
+  background: var(--card);
+  box-shadow: var(--sh-rest);
+  position: relative;
+  overflow: hidden;
+}
+
+.resume-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  pointer-events: none;
+  transition: background .45s var(--ease);
+}
+
+.resume-art {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  position: relative;
+  z-index: 1;
+}
+
+.resume-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+.resume-info {
+  min-width: 0;
+  flex: 1;
+  position: relative;
+  z-index: 1
+}
+
+.resume-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em
+}
+
+.resume-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.resume-artist {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.resume-play {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  transition: filter .12s var(--ease), transform .08s var(--ease);
+}
+
+.resume-play:hover {
+  filter: brightness(1.1)
+}
+
+.resume-play:active {
+  transform: scale(.88)
+}
+
+.home-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between
+}
+
+.home-section-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em
+}
 
 /* ── Album grid ────────────────────────────────────────────────── */
-.album-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
-  gap:16px;padding:4px 2px 20px;overflow-y:auto;flex:1;
+.album-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  padding: 4px 2px 20px;
+  overflow-y: auto;
+  flex: 1;
 }
-.album-grid::-webkit-scrollbar{width:4px}
-.album-grid::-webkit-scrollbar-thumb{background:var(--divider);border-radius:2px}
-.album-card{
-  border-radius:18px;overflow:hidden;
-  background:var(--card);
-  box-shadow:var(--sh-rest);
-  cursor:pointer;transition:transform .15s var(--ease);
+
+.album-grid::-webkit-scrollbar {
+  width: 4px
 }
-.album-card:hover{transform:translateY(-4px)}
-.album-card img,.album-card-ph{width:100%;aspect-ratio:1;object-fit:cover;display:block}
-.album-card-ph{display:flex;align-items:center;justify-content:center;color:var(--text-2);background:var(--surface)}
-.album-card-info{padding:11px 13px 13px}
-.album-card-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.album-card-artist{font-size:13px;color:var(--text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.album-grid::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
+}
+
+.album-card {
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: var(--sh-rest);
+  cursor: pointer;
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+/* El hover con transform solo tiene sentido con puntero fino: en táctil el
+   toque dispara :hover y deja la tarjeta levantada. */
+@media (hover: hover) and (pointer: fine) {
+  .album-card:hover {
+    transform: translateY(-4px)
+  }
+}
+
+.album-card:active {
+  transform: scale(.97)
+}
+
+.album-card img,
+.album-card-ph {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block
+}
+
+.album-card-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  background: var(--surface)
+}
+
+.album-card-info {
+  padding: 11px 13px 13px
+}
+
+.album-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.album-card-artist {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
 
 /* ── Album detail ──────────────────────────────────────────────── */
-.album-detail-header{
-  display:flex;align-items:flex-end;gap:26px;
-  padding:20px;flex-shrink:0;margin-bottom:12px;
-  background:var(--card);border-radius:25px;
-  box-shadow:var(--sh-rest);
+.album-detail-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 26px;
+  padding: 20px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  background: var(--card);
+  border-radius: 25px;
+  box-shadow: var(--sh-rest);
 }
-.ad-art-wrap{
-  width:150px;height:150px;border-radius:14px;overflow:hidden;
-  flex-shrink:0;box-shadow:var(--sh-pop);
-  background:var(--surface);
+
+.ad-art-wrap {
+  width: 150px;
+  height: 150px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: var(--sh-pop);
+  background: var(--surface);
 }
-.ad-art-wrap img{width:100%;height:100%;object-fit:cover;display:block}
-.ad-art-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--text-2)}
-.ad-info{min-width:0}
-.ad-type{font-size:12px;font-weight:500;color:var(--text-2);letter-spacing:.02em}
-.ad-title{font-size:22px;font-weight:700;letter-spacing:-.3px;margin:4px 0 6px}
-.ad-meta{font-size:13px;color:var(--text-2);margin-bottom:14px}
-.ad-actions{display:flex;gap:10px}
+
+.ad-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+.ad-art-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2)
+}
+
+.ad-info {
+  min-width: 0
+}
+
+.ad-type {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em
+}
+
+.ad-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+  margin: 4px 0 6px
+}
+
+.ad-meta {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: 14px
+}
+
+.ad-actions {
+  display: flex;
+  gap: 10px
+}
+
+/* ── Playlist header (portada propia de la lista) ─────────────────── */
+/* Color de la lista: variables CON ÁMBITO en la vista. No se toca --dyn/--accent
+   globales, que pertenecen al color extraído de la carátula que suena.
+   showPlaylistView() sobrescribe estas dos inline. La estructura del degradado
+   (linear-gradient de dos paradas) se mantiene idéntica en el fallback y en el
+   personalizado: así el navegador puede interpolarlo al cambiar de lista. */
+#view-playlist {
+  --pl-accent: var(--accent);
+  --pl-grad: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.pl-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 24px;
+  flex-shrink: 0;
+  margin: 4px 0 14px;
+  background: var(--card);
+  border-radius: 25px;
+  box-shadow: var(--sh-rest);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Mismo lavado de color que la tarjeta "Continuar escuchando" del Home,
+   para que las dos cabeceras grandes se sientan de la misma familia. */
+.pl-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--pl-grad);
+  opacity: .17;
+  /* con color propio el banner se ve de verdad; sin él queda el lavado suave
+     de siempre para no gritar cuando no se ha personalizado nada */
+  /* La máscara hace el desvanecido hacia la derecha, así el degradado propio
+     de la lista conserva sus dos colores exactos y sigue siendo interpolable. */
+  -webkit-mask-image: linear-gradient(120deg, #000 0%, rgba(0, 0, 0, .5) 45%, transparent 82%);
+  mask-image: linear-gradient(120deg, #000 0%, rgba(0, 0, 0, .5) 45%, transparent 82%);
+  pointer-events: none;
+  transition: background .45s var(--ease), opacity .45s var(--ease);
+}
+
+#view-playlist.pl-custom .pl-header::before {
+  opacity: .48;
+  -webkit-mask-image: linear-gradient(120deg, #000 0%, rgba(0, 0, 0, .7) 55%, rgba(0, 0, 0, .3) 100%);
+  mask-image: linear-gradient(120deg, #000 0%, rgba(0, 0, 0, .7) 55%, rgba(0, 0, 0, .3) 100%);
+}
+
+/* Filo de color al pie de la cabecera: la seña más nítida de que la lista
+   tiene color propio, y no depende de la opacidad del lavado. */
+#view-playlist.pl-custom .pl-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--pl-grad);
+  pointer-events: none;
+  transition: background .45s var(--ease);
+}
+
+.pl-cover {
+  position: relative;
+  z-index: 1;
+  width: 104px;
+  height: 104px;
+  border-radius: 20px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--pl-grad);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--pl-accent) 28%, transparent);
+  transition: transform var(--d-hover) var(--ease-out), box-shadow .3s var(--ease), background .45s var(--ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pl-cover:hover {
+    transform: scale(1.04) translateY(-2px);
+    box-shadow: 0 10px 26px color-mix(in srgb, var(--pl-accent) 38%, transparent)
+  }
+}
+
+.pl-cover:active {
+  transform: scale(.97)
+}
+
+.pl-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+.pl-cover-ph {
+  color: #fff;
+  opacity: .9
+}
+
+.pl-cover-edit {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .14s var(--ease);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: .01em;
+}
+
+.pl-cover:hover .pl-cover-edit,
+.pl-cover:focus-visible .pl-cover-edit {
+  opacity: 1
+}
+
+.pl-header-info {
+  min-width: 0;
+  position: relative;
+  z-index: 1
+}
+
+.pl-header-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pl-accent);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.pl-header-info .view-title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -.8px;
+  margin: 2px 0 4px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-count {
+  font-size: 13px;
+  color: var(--text-2)
+}
+
+.pl-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0 12px;
+  height: 36px;
+  width: 220px;
+  flex-shrink: 0;
+  transition: background .15s var(--ease);
+}
+
+.pl-search-icon {
+  color: var(--text-2);
+  flex-shrink: 0
+}
+
+.pl-search {
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  font-family: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.pl-search::placeholder {
+  color: var(--text-2)
+}
 
 /* ── Artist grid ───────────────────────────────────────────────── */
-.artist-grid{
-  display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
-  gap:16px;padding:4px 2px 20px;overflow-y:auto;flex:1;
+.artist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+  padding: 4px 2px 20px;
+  overflow-y: auto;
+  flex: 1;
 }
-.artist-grid::-webkit-scrollbar{width:4px}
-.artist-grid::-webkit-scrollbar-thumb{background:var(--divider);border-radius:2px}
-.artist-card{
-  border-radius:20px;padding:20px 14px 16px;
-  background:var(--card);
-  box-shadow:var(--sh-rest);
-  cursor:pointer;text-align:center;
-  transition:transform .15s var(--ease);
+
+.artist-grid::-webkit-scrollbar {
+  width: 4px
 }
-.artist-card:hover{transform:translateY(-3px)}
-.artist-card-avatar{
-  width:72px;height:72px;border-radius:999px;
-  background:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  font-size:26px;font-weight:600;color:#fff;
-  margin:0 auto 12px;
+
+.artist-grid::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
 }
-.artist-card-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.artist-card-count{font-size:13px;color:var(--text-2);margin-top:2px}
+
+.artist-card {
+  border-radius: 20px;
+  padding: 20px 14px 16px;
+  background: var(--card);
+  box-shadow: var(--sh-rest);
+  cursor: pointer;
+  text-align: center;
+  transition: transform var(--d-hover) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .artist-card:hover {
+    transform: translateY(-3px)
+  }
+}
+
+.artist-card:active {
+  transform: scale(.97)
+}
+
+.artist-card-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 auto 12px;
+}
+
+.artist-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.artist-card-count {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 2px
+}
 
 /* ── Artist detail ─────────────────────────────────────────────── */
-.artist-detail-header{
-  display:flex;align-items:flex-end;gap:26px;
-  padding:20px;flex-shrink:0;margin-bottom:12px;
-  background:var(--card);border-radius:25px;
-  box-shadow:var(--sh-rest);
+.artist-detail-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 26px;
+  padding: 20px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  background: var(--card);
+  border-radius: 25px;
+  box-shadow: var(--sh-rest);
 }
-.art-avatar-lg{
-  width:130px;height:130px;border-radius:999px;flex-shrink:0;
-  background:var(--accent);
-  display:flex;align-items:center;justify-content:center;
-  font-size:46px;font-weight:600;color:#fff;
-  box-shadow:var(--sh-pop);
+
+.art-avatar-lg {
+  width: 130px;
+  height: 130px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46px;
+  font-weight: 600;
+  color: #fff;
+  box-shadow: var(--sh-pop);
 }
-.art-detail-info{min-width:0}
+
+.art-detail-info {
+  min-width: 0
+}
 
 /* ── Settings ──────────────────────────────────────────────────── */
-.settings-wrap{padding:4px 2px 20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px}
-.settings-card{
-  background:var(--card);
-  border-radius:25px;overflow:hidden;
-  box-shadow:var(--sh-rest);
-}
-.sc-title{padding:16px 20px 8px;font-size:12px;font-weight:500;color:var(--text-2);letter-spacing:.02em}
-.sc-add{margin:8px 20px 16px;font-family:inherit}
-.settings-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 20px;min-height:48px;position:relative}
-.settings-row::after{content:'';position:absolute;left:20px;right:20px;bottom:0;height:.5px;background:var(--divider)}
-.settings-row:last-child::after{display:none}
-.sr-label{display:flex;flex-direction:column;gap:3px;min-width:0}
-.sr-title{font-size:14px;font-weight:500}
-.sr-sub{font-size:11px;color:var(--text-2)}
-.s-select{
-  background:var(--surface);border:none;
-  color:var(--text);border-radius:12px;padding:8px 12px;
-  font-size:13px;font-weight:500;cursor:pointer;outline:none;font-family:inherit;
-  -webkit-appearance:none;appearance:none;
-}
-.s-select{color-scheme:dark}
-.light-mode .s-select{color-scheme:light}
-
-/* Accent color picker */
-.accent-picker{display:flex;align-items:center;gap:8px}
-.accent-swatches{display:flex;align-items:center;gap:8px}
-.accent-swatch{
-  width:24px;height:24px;border-radius:999px;
-  cursor:pointer;border:2px solid transparent;
-  transition:transform .1s var(--ease),border-color .12s var(--ease);
-  position:relative;
-}
-.accent-swatch:hover{transform:scale(1.12)}
-.accent-swatch.active{border-color:var(--text)}
-.accent-custom{
-  position:relative;width:26px;height:26px;
-  display:inline-flex;cursor:pointer;
-}
-.accent-custom-ring{
-  width:26px;height:26px;border-radius:999px;
-  background:conic-gradient(from 0deg,#ff5858,#ffd158,#58ff8b,#58c7ff,#9d58ff,#ff58d1,#ff5858);
-  display:block;
-  border:2px solid transparent;
-  transition:border-color .12s var(--ease);
-}
-.accent-custom.active .accent-custom-ring{border-color:var(--text)}
-.accent-custom input[type=color]{
-  position:absolute;inset:0;width:100%;height:100%;
-  opacity:0;cursor:pointer;border:none;padding:0;
-}
-.folder-row{display:flex;align-items:center;gap:12px;padding:12px 20px;min-height:48px;position:relative}
-.folder-row::after{content:'';position:absolute;left:20px;right:20px;bottom:0;height:.5px;background:var(--divider)}
-.folder-row:last-of-type::after{display:none}
-.folder-path{flex:1;min-width:0;font-size:13px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.folder-rm{
-  width:28px;height:28px;flex-shrink:0;background:none;border:none;cursor:pointer;
-  color:var(--text-2);border-radius:8px;display:flex;align-items:center;justify-content:center;
-  transition:background .12s var(--ease),color .12s var(--ease);
-}
-.folder-rm:hover{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
-
-/* ── Player bar — floating HIG surface ─────────────────────────── */
-.player-bar{
-  position:absolute;
-  bottom:16px;
-  left:50%;transform:translateX(-50%);
-  width:min(390px, calc(100% - 260px));
-  background:var(--card);
-  border:1px solid var(--border);
-  border-radius:22px;
-  box-shadow:var(--sh-pop);
-  display:flex;flex-direction:column;
-  z-index:40;
-  transition:background .3s var(--ease),border-color .3s var(--ease);
-  overflow:hidden;
-}
-/* faint album-tint wash — the "keep the tint" intent */
-.player-bar::before{
-  content:'';position:absolute;inset:0;
-  background:color-mix(in srgb,var(--accent) 7%,transparent);
-  pointer-events:none;transition:background .45s var(--ease);
+.settings-wrap {
+  padding: 4px 2px 20px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px
 }
 
-/* Progress strip */
-.pb-prog-strip{
-  display:flex;align-items:center;gap:8px;
-  padding:11px 14px 0;
-  flex-shrink:0;position:relative;z-index:1;
-}
-.pb-time{
-  font-size:11px;color:var(--text-2);
-  width:28px;text-align:center;flex-shrink:0;
-  font-variant-numeric:tabular-nums;
-}
-.pb-prog-wrap{
-  flex:1;position:relative;height:14px;
-  display:flex;align-items:center;cursor:pointer;
-}
-.pb-prog-bg{
-  position:relative;width:100%;height:4px;
-  background:var(--toggle-off);border-radius:2px;
-}
-.pb-prog-fill{
-  position:absolute;left:0;top:0;bottom:0;
-  background:var(--accent);border-radius:2px;
-  pointer-events:none;transition:background .45s var(--ease);
-}
-.pb-prog-range{
-  position:absolute;left:0;top:50%;transform:translateY(-50%);
-  width:100%;height:14px;opacity:0;cursor:pointer;margin:0;
-  -webkit-appearance:none;appearance:none;
-}
-.pb-prog-wrap:hover .pb-prog-bg{height:5px}
-
-/* Cover */
-.pb-art{
-  width:84px;height:84px;
-  border-radius:14px;overflow:hidden;
-  background:var(--surface);
-  cursor:pointer;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  transition:transform .12s var(--ease);
-  align-self:center;
-}
-.pb-art:hover{transform:scale(1.03)}
-.pb-art img{width:100%;height:100%;object-fit:cover;display:block}
-.pb-art-ph{color:var(--text-2)}
-
-.pb-bottom{
-  display:flex;align-items:stretch;
-  padding:10px 14px 14px;
-  gap:12px;
-  min-height:96px;position:relative;z-index:1;
+.settings-card {
+  background: var(--card);
+  border-radius: 25px;
+  overflow: hidden;
+  box-shadow: var(--sh-rest);
 }
 
-.pb-center{
-  flex:1;min-width:0;
-  display:flex;flex-direction:column;
-  justify-content:center;
-  gap:12px;
+.sc-title {
+  padding: 16px 20px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: .02em
 }
-.pb-info-row{text-align:center}
-.pb-title{
-  font-size:14px;font-weight:600;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.pb-artist{
-  font-size:11px;color:var(--text-2);margin-top:3px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.pb-controls{display:flex;align-items:center;justify-content:center;gap:6px}
-.pb-ctrl{
-  width:36px;height:36px;background:none;border:none;cursor:pointer;
-  color:var(--text);border-radius:999px;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .12s var(--ease),color .12s var(--ease),transform .08s var(--ease);
-}
-.pb-ctrl:hover{background:var(--hover)}
-.pb-ctrl:active{transform:scale(.9)}
-.pb-ctrl.active{color:var(--accent)}
-.pb-ctrl.play{
-  width:46px;height:46px;
-  background:var(--accent);color:#fff !important;
-  transition:background .45s var(--ease),filter .12s var(--ease),transform .08s var(--ease);
-}
-.pb-ctrl.play:hover{filter:brightness(1.1);background:var(--accent)}
 
-/* Volume */
-.pb-vol-col{
-  display:flex;flex-direction:column;align-items:center;
-  gap:8px;flex-shrink:0;width:22px;
+.sc-add {
+  margin: 8px 20px 16px;
+  font-family: inherit
 }
-.pb-vol-track{
-  flex:1;width:8px;
-  background:var(--toggle-off);border-radius:4px;
-  position:relative;cursor:pointer;
-  touch-action:none;
-}
-.pb-vol-fill{
-  position:absolute;bottom:0;left:0;right:0;
-  background:var(--accent);border-radius:4px;
-  pointer-events:none;transition:background .45s var(--ease);
-  height:100%;
-}
-.pb-vol-knob{
-  position:absolute;left:50%;
-  width:14px;height:14px;border-radius:999px;
-  background:#fff;
-  transform:translate(-50%,50%);
-  bottom:100%;
-  box-shadow:0 1px 4px rgba(0,0,0,.35);
-  pointer-events:none;opacity:0;
-  transition:opacity .12s var(--ease);
-}
-.pb-vol-col:hover .pb-vol-knob,
-.pb-vol-track.dragging .pb-vol-knob{opacity:1}
 
-.pb-mute-btn{
-  width:22px;height:22px;flex-shrink:0;
-  background:none;border:none;cursor:pointer;
-  color:var(--text-2);
-  display:flex;align-items:center;justify-content:center;
-  border-radius:6px;transition:color .12s var(--ease);padding:0;
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px;
+  min-height: 48px;
+  position: relative
 }
-.pb-mute-btn:hover{color:var(--text)}
-.pb-mute-btn.muted{color:var(--accent)}
+
+.settings-row::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: .5px;
+  background: var(--divider)
+}
+
+.settings-row:last-child::after {
+  display: none
+}
+
+.sr-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0
+}
+
+.sr-title {
+  font-size: 14px;
+  font-weight: 500
+}
+
+.sr-sub {
+  font-size: 11px;
+  color: var(--text-2)
+}
+
+/* Deslizador de ajustes. El range nativo se estila entero por pseudoelementos
+   (a diferencia del <select>, aquí WebKit sí deja): pista propia con la parte
+   ya recorrida en color de acento y pulgar blanco. --pct lo escribe el JS. */
+.s-range-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.s-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 150px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(to right,
+      var(--accent) 0 var(--pct, 0%),
+      var(--surface) var(--pct, 0%) 100%);
+  outline: none;
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease);
+}
+
+.s-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .38);
+  cursor: grab;
+  transition: transform var(--d-press) var(--ease-out);
+}
+
+.s-range:active::-webkit-slider-thumb {
+  transform: scale(1.18);
+  cursor: grabbing;
+}
+
+/* Ancho fijo y cifras tabulares: el valor no debe empujar el layout al pasar
+   de "9 s" a "12 s" mientras se arrastra. */
+.s-range-val {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  min-width: 82px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Desplegable propio. El <select> nativo tenía el control estilado pero la
+   lista desplegada la pinta WebKitGTK a nivel de plataforma: no acepta CSS y
+   salía blanca con texto oscuro sobre el tema oscuro. Este va en el DOM. */
+.s-picker {
+  position: relative
+}
+
+.s-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: none;
+  color: var(--text);
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  min-width: 128px;
+  justify-content: space-between;
+  transition: background var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .s-picker-btn:hover {
+    background: var(--active)
+  }
+}
+
+.s-picker-btn:active {
+  transform: scale(.97)
+}
+
+.s-picker-chev {
+  color: var(--text-2);
+  flex-shrink: 0;
+  transition: transform var(--d-pop) var(--ease-out);
+}
+
+.s-picker.open .s-picker-chev {
+  transform: rotate(180deg)
+}
+
+/* position: fixed — .settings-card tiene overflow:hidden por el radio, y un
+   menú absolute quedaba recortado. JS coloca left/top al abrirlo. */
+.s-picker-menu {
+  position: fixed;
+  z-index: 210;
+  min-width: 150px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--sh-pop);
+  padding: 5px;
+  display: none;
+  transform-origin: var(--picker-origin, top right);
+}
+
+.s-picker.open .s-picker-menu {
+  display: block;
+  animation: ctxPop var(--d-pop) var(--ease-out);
+}
+
+.s-picker-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 11px;
+  border: none;
+  background: none;
+  border-radius: 11px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  transition: background var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .s-picker-opt:hover {
+    background: var(--hover)
+  }
+}
+
+.s-picker-opt:active {
+  transform: scale(.97)
+}
+
+.s-picker-opt.active {
+  color: var(--accent)
+}
+
+/* Palomita de la opción activa */
+.s-picker-opt.active::after {
+  content: '';
+  width: 6px;
+  height: 10px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+  flex-shrink: 0;
+}
+
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  min-height: 48px;
+  position: relative
+}
+
+.folder-row::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 0;
+  height: .5px;
+  background: var(--divider)
+}
+
+.folder-row:last-of-type::after {
+  display: none
+}
+
+.folder-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.folder-rm {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+
+.folder-rm:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger)
+}
+
+/* ── Player bar — floating card, not edge-to-edge (menos espacio
+   horizontal: la barra en sí ocupa menos ancho, con margen a los lados) ── */
+.player-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(clamp(880px, 74vw, 1240px), calc(100% - 28px));
+  height: var(--pb-h);
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  /* Dos filas: transporte arriba, progreso a lo ancho abajo. El volumen va en
+     una segunda columna que abarca las dos filas, para poder ser vertical. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  padding: 8px 14px 9px;
+  column-gap: 14px;
+  row-gap: 3px;
+  z-index: 40;
+  /* mismo hilo de luz + elevación tintada que usan los popovers/diálogos
+     de Settings, pero pegada abajo — sin borde inferior, que quedaría
+     encimado con el borde de la propia ventana. */
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, var(--sh-pop);
+  transition: background .3s var(--ease), border-color .3s var(--ease);
+  overflow: hidden;
+}
+
+.light-mode .player-bar {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .6) inset, var(--sh-pop)
+}
+
+/* colorful, lively wash instead of a flat card — sweeps accent → accent-2 */
+.player-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg,
+      color-mix(in srgb, var(--accent) 10%, transparent) 0%,
+      color-mix(in srgb, var(--accent-2) 7%, transparent) 45%,
+      transparent 85%);
+  pointer-events: none;
+  transition: background .45s var(--ease);
+}
+
+/* Fila 1: info a la izquierda y transporte centrado en la barra completa.
+   El centrado es óptico-real (no "lo que sobre a la derecha del texto"):
+   .pb-controls va absoluto al 50% para que no lo desplace un título largo. */
+.pb-main {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  min-width: 0;
+  /* los controles están absolutos y no aportan alto: sin esto la fila la
+     mediría sólo la carátula y el play sobresaldría por arriba y por abajo */
+  min-height: clamp(44px, 5vh, 58px);
+  display: flex;
+  align-items: center;
+  z-index: 1;
+}
+
+/* Left: cover + title/artist */
+.pb-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  /* deja hueco al bloque de controles centrado, que flota por encima */
+  max-width: calc(50% - 100px);
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.pb-art {
+  width: clamp(40px, 4.4vh, 52px);
+  height: clamp(40px, 4.4vh, 52px);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, var(--surface)), color-mix(in srgb, var(--accent-2) 22%, var(--surface)));
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--d-press) var(--ease-out), box-shadow .3s var(--ease);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* Velo + icono de expandir. El scrim va aparte del icono para que el fundido
+   no arrastre también la carátula. */
+.pb-art-expand {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, .5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--d-hover) var(--ease);
+}
+
+.pb-art-expand svg {
+  transform: scale(.7);
+  transition: transform var(--d-pop) var(--ease-spring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+
+  .pb-art:hover .pb-art-expand,
+  .pb-art:focus-visible .pb-art-expand {
+    opacity: 1
+  }
+
+  .pb-art:hover .pb-art-expand svg {
+    transform: scale(1)
+  }
+}
+
+.pb-art:active {
+  transform: scale(.96)
+}
+
+.pb-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+.pb-art-ph {
+  color: #fff;
+  opacity: .85
+}
+
+.pb-info-row {
+  min-width: 0;
+  text-align: left
+}
+
+.pb-title {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pb-artist {
+  font-size: 11.5px;
+  color: var(--text-2);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pb-controls {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Progress strip — fila 2, a lo ancho de toda la barra */
+.pb-prog-strip {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.pb-time {
+  font-size: 11px;
+  color: var(--text-2);
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-prog-wrap {
+  flex: 1;
+  position: relative;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.pb-prog-bg {
+  position: relative;
+  width: 100%;
+  height: 7px;
+  background: var(--accent-track);
+  border-radius: var(--track-r);
+  transition: height var(--d-hover) var(--ease), background .45s var(--ease);
+}
+
+.pb-prog-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  /* la píldora no se aplasta a 0%: mantiene al menos su propio alto */
+  min-width: 7px;
+  background: var(--accent);
+  border-radius: var(--track-r);
+  pointer-events: none;
+  transition: background .45s var(--ease);
+}
+
+.pb-prog-range {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 14px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.pb-prog-wrap:hover .pb-prog-bg {
+  height: 9px
+}
+
+/* Right: queue button + volumen vertical (ocupa las dos filas) */
+.pb-right {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+}
+
+.pb-queue-btn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease), transform .08s var(--ease);
+}
+
+.pb-queue-btn:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.pb-queue-btn:active {
+  transform: scale(.85)
+}
+
+.pb-queue-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft)
+}
+
+/* Transporte en píldora (no círculos): prev/next altos y estrechos, play un
+   cuadrado redondeado más grande — el peso visual dice cuál es el principal. */
+.pb-ctrl {
+  width: 30px;
+  height: 38px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: background .12s var(--ease), color .12s var(--ease), transform .08s var(--ease);
+}
+
+/* Aleatorio y repetición son secundarios: más pequeños y en gris hasta que
+   se activan. */
+.pb-ctrl.shuffle,
+.pb-ctrl.repeat {
+  width: 26px;
+  height: 30px;
+  border-radius: 10px;
+  color: var(--text-2);
+}
+
+.pb-ctrl:hover {
+  background: var(--accent-soft);
+  color: var(--text)
+}
+
+.pb-ctrl:active {
+  transform: scale(.9)
+}
+
+/* Un único tinte para todos los estados activos: el acento de Ajustes de
+   BookOS (o el de la carátula). Antes shuffle y repeat usaban --accent-2 y
+   --accent-3, que se despegaban del color elegido. */
+.pb-ctrl.active,
+.pb-ctrl.shuffle.active,
+.pb-ctrl.repeat.active {
+  color: var(--accent);
+  background: var(--accent-soft)
+}
+
+/* "Repetir una" vs "repetir todo": el icono es el mismo, el punto los separa */
+.pb-ctrl.repeat.repeat-one::after,
+.imm-ctrl.repeat-one::after {
+  content: '';
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateX(-50%);
+}
+
+.pb-ctrl.play {
+  width: 46px;
+  height: 42px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: #fff !important;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: background .45s var(--ease), filter .12s var(--ease), transform .08s var(--ease), box-shadow .3s var(--ease);
+}
+
+.pb-ctrl.play:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 55%, transparent)
+}
+
+.pb-ctrl.play:active {
+  transform: scale(.92)
+}
+
+/* Antes esto latía en bucle (1.8s infinite) mientras sonaba música: un bucle
+   permanente en pantalla es ruido visual y pintado continuo. El anillo estático
+   comunica lo mismo — "está sonando" — sin pedir atención. */
+.pb-ctrl.play.is-playing {
+  box-shadow:
+    0 3px 10px color-mix(in srgb, var(--accent) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent)
+}
+
+/* Icon morph — play↔pause swaps with a spring pop+spin instead of a hard cut */
+.pb-ctrl.play svg,
+.imm-play svg {
+  transition: none
+}
+
+.pb-ctrl.play svg.morphing,
+.imm-play svg.morphing {
+  animation: iconMorph .26s var(--ease-spring)
+}
+
+@keyframes iconMorph {
+  0% {
+    /* nada en el mundo real aparece de la nada: se parte de un tamaño visible */
+    transform: scale(.6) rotate(-24deg);
+    opacity: 0
+  }
+
+  60% {
+    transform: scale(1.2) rotate(6deg);
+    opacity: 1
+  }
+
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1
+  }
+}
+
+/* Prev/next — elastic bounce + directional flick on click */
+.pb-ctrl.bounce-prev svg,
+.imm-ctrl.bounce-prev svg {
+  animation: bouncePrev .32s var(--ease-spring)
+}
+
+.pb-ctrl.bounce-next svg,
+.imm-ctrl.bounce-next svg {
+  animation: bounceNext .32s var(--ease-spring)
+}
+
+@keyframes bouncePrev {
+  0% {
+    transform: scale(1) translateX(0)
+  }
+
+  30% {
+    transform: scale(.72) translateX(-3px)
+  }
+
+  65% {
+    transform: scale(1.18) translateX(1px)
+  }
+
+  100% {
+    transform: scale(1) translateX(0)
+  }
+}
+
+@keyframes bounceNext {
+  0% {
+    transform: scale(1) translateX(0)
+  }
+
+  30% {
+    transform: scale(.72) translateX(3px)
+  }
+
+  65% {
+    transform: scale(1.18) translateX(-1px)
+  }
+
+  100% {
+    transform: scale(1) translateX(0)
+  }
+}
+
+.pb-ctrl.shuffle.bounce-toggle svg,
+.pb-ctrl.repeat.bounce-toggle svg {
+  animation: bounceToggle .3s var(--ease-spring)
+}
+
+@keyframes bounceToggle {
+  0% {
+    transform: scale(1) rotate(0)
+  }
+
+  35% {
+    transform: scale(.7) rotate(-14deg)
+  }
+
+  70% {
+    transform: scale(1.22) rotate(6deg)
+  }
+
+  100% {
+    transform: scale(1) rotate(0)
+  }
+}
+
+/* Volume — horizontal, icon + slider in a row */
+/* Volumen VERTICAL en el dock: pista arriba, altavoz debajo. column-reverse
+   porque el botón va primero en el HTML (el orden del DOM manda para el
+   foco de teclado, y ahí el control debe preceder al ajuste fino). */
+.pb-vol-row {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Lo que cabe junto al altavoz dentro del alto de la barra: más y
+   .player-bar (overflow:hidden) recortaría el altavoz por abajo. */
+.pb-vol-track.vertical {
+  width: 9px;
+  height: clamp(30px, 3.4vh, 44px);
+  background: var(--accent-track);
+  border-radius: var(--track-r);
+  position: relative;
+  cursor: pointer;
+  touch-action: none;
+  transition: width var(--d-hover) var(--ease), background .45s var(--ease);
+}
+
+.pb-vol-row:hover .pb-vol-track.vertical,
+.pb-vol-track.vertical.dragging {
+  width: 11px
+}
+
+.pb-vol-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 9px;
+  background: var(--accent);
+  border-radius: var(--track-r);
+  pointer-events: none;
+  transition: background .45s var(--ease);
+  height: 100%;
+}
+
+.pb-mute-btn {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color .12s var(--ease);
+  padding: 0;
+}
+
+.pb-mute-btn:hover {
+  color: var(--text)
+}
+
+.pb-mute-btn.muted {
+  color: var(--accent)
+}
 
 /* ── Immersive (temporary overlay — blur allowed) ──────────────── */
-.immersive{
-  position:absolute;inset:0;z-index:60;
-  display:none;align-items:center;justify-content:center;
-  border-radius:20px;overflow:hidden;
+.immersive {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  overflow: hidden;
+  /* página nueva de verdad, no un modal traslúcido: fondo sólido debajo del
+     blur de portada, así nunca se ve la lista de canciones asomando detrás.
+     Negro fijo, NO var(--bg): en tema claro el fondo era blanco y, como el
+     blur de 60px deja los bordes translúcidos, el blanco se colaba por detrás
+     y toda la vista salía lavada. Aquí el texto es blanco siempre, así que el
+     lienzo tiene que ser oscuro pase lo que pase con el tema. */
+  background: #000;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  /* visibility retrasada hasta el final de la salida: cerrado, el compositor no
+     tiene que rasterizar las dos capas de blur a pantalla completa, que es lo
+     que hacía ir lenta toda la app aunque el inmersivo ni se viera. */
+  visibility: hidden;
+  transition: transform .32s var(--ease-spring), opacity .22s var(--ease), visibility 0s linear .32s;
 }
-.immersive.active{display:flex;animation:fadeIn .2s var(--ease)}
-.imm-bg{
-  position:absolute;inset:0;
-  background-size:cover;background-position:center;
-  filter:blur(60px) saturate(1.7) brightness(.28);
-  transform:scale(1.2);transition:background-image .5s var(--ease);
+
+.immersive.active {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transition: transform .32s var(--ease-spring), opacity .22s var(--ease), visibility 0s linear 0s;
 }
-.oled-mode .imm-bg{filter:blur(60px) saturate(1.3) brightness(.12)}
-.imm-scrim{position:absolute;inset:0;background:rgba(0,0,0,.3)}
-.oled-mode .imm-scrim{background:rgba(0,0,0,.55)}
-.imm-body{
-  position:relative;z-index:1;
-  display:flex;flex-direction:column;align-items:center;gap:18px;
-  padding:32px;width:100%;max-width:500px;
+
+/* `background-image` NO es interpolable: la transición anterior no animaba nada,
+   el cambio de carátula era un corte seco. Ahora son dos capas apiladas y el
+   crossfade se hace con opacity (compuesta en GPU). setImmersiveBg() alterna. */
+/* El blur se aplica a una capa de 1/4 de tamaño y luego se escala x4.8. Visual
+   equivalente a blur(60px) a tamaño completo, pero desenfocando ~16 veces menos
+   píxeles — el coste del blur crece con el área, y a resolución alta con
+   escalado fraccional eso se notaba en cada frame. */
+.imm-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 25%;
+  height: 25%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(15px) saturate(1.7) brightness(.28);
+  transform-origin: top left;
+  transform: scale(4.8);
+  opacity: 0;
+  transition: opacity .4s var(--ease-out);
 }
-.imm-art-wrap{
-  width:clamp(160px,28vw,230px);aspect-ratio:1;
-  border-radius:18px;overflow:hidden;flex-shrink:0;
-  box-shadow:0 24px 64px rgba(0,0,0,.7);
-  background:rgba(255,255,255,.06);
+
+.imm-bg.show {
+  opacity: 1
 }
-.imm-art{width:100%;height:100%;object-fit:cover;display:block}
-.imm-art-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.25)}
-.imm-info{text-align:center}
-.imm-title{font-size:22px;font-weight:700;color:#fff;letter-spacing:-.3px}
-.imm-artist{font-size:15px;color:rgba(255,255,255,.65);margin-top:4px}
-.imm-album{font-size:13px;color:rgba(255,255,255,.4);margin-top:2px}
-.imm-controls{display:flex;align-items:center;gap:14px}
-.imm-ctrl{
-  background:none;border:none;cursor:pointer;
-  color:rgba(255,255,255,.75);border-radius:999px;
-  display:flex;align-items:center;justify-content:center;
-  padding:8px;transition:color .1s var(--ease),background .1s var(--ease),transform .08s var(--ease);
+
+.oled-mode .imm-bg {
+  filter: blur(15px) saturate(1.3) brightness(.12)
 }
-.imm-ctrl:hover{color:#fff;background:rgba(255,255,255,.1)}
-.imm-ctrl:active{transform:scale(.9)}
-.imm-play{
-  width:64px;height:64px;padding:0;
-  background:#fff;color:#000 !important;
-  box-shadow:0 6px 24px rgba(0,0,0,.4);
-  transition:filter .1s var(--ease),transform .08s var(--ease) !important;
+
+/* colores dinámicos: cuando hay portada, esto la tiñe; sin portada, son las
+   únicas manchas de color sobre el negro — nunca queda una página muerta. */
+.imm-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent-2) 38%, transparent) 0%, transparent 55%),
+    radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--accent) 32%, transparent) 0%, transparent 55%),
+    rgba(0, 0, 0, .3);
 }
-.imm-play:hover{filter:brightness(1.06);background:#fff !important}
-.imm-prog-row{display:flex;align-items:center;gap:12px;width:100%;max-width:400px}
-.imm-time{font-size:12px;color:rgba(255,255,255,.5);width:36px;text-align:center;font-variant-numeric:tabular-nums;flex-shrink:0}
-.imm-prog-wrap{flex:1;position:relative;height:16px;display:flex;align-items:center}
-.imm-prog-bg{position:relative;width:100%;height:4px;background:rgba(255,255,255,.2);border-radius:2px}
-.imm-prog-fill{position:absolute;left:0;top:0;bottom:0;background:rgba(255,255,255,.85);border-radius:2px;pointer-events:none}
-.imm-prog-range{position:absolute;left:0;top:50%;transform:translateY(-50%);width:100%;height:16px;opacity:0;cursor:pointer;margin:0;-webkit-appearance:none;appearance:none}
-.imm-prog-wrap:hover .imm-prog-bg{height:5px}
-.imm-close{
-  position:absolute;top:14px;right:14px;
-  width:34px;height:34px;
-  background:rgba(255,255,255,.12);border:none;cursor:pointer;
-  color:rgba(255,255,255,.8);border-radius:999px;
-  display:flex;align-items:center;justify-content:center;
-  transition:background .12s var(--ease);
+
+.oled-mode .imm-scrim {
+  background:
+    radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent-2) 28%, transparent) 0%, transparent 55%),
+    radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--accent) 24%, transparent) 0%, transparent 55%),
+    rgba(0, 0, 0, .6);
 }
-.imm-close:hover{background:rgba(255,255,255,.22);color:#fff}
+
+/* Top-right actions: queue + close */
+.imm-top-actions {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Corazón en pantalla completa: rojo cuando está marcado, igual que en la
+   tabla, para que no haya que aprender un código nuevo. */
+.imm-fav.active {
+  color: #ff453a;
+  background: rgba(255, 69, 58, .18);
+}
+
+/* Asa de arrastre: sin ella, "tirar hacia abajo para cerrar" es un gesto
+   secreto. Es una pista, no un control. */
+.imm-handle {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .28);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Toda la zona muerta del inmersivo es arrastrable */
+.immersive {
+  cursor: grab
+}
+
+.immersive:active {
+  cursor: grabbing
+}
+
+.imm-top-btn {
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, .12);
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .8);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease), transform .08s var(--ease);
+}
+
+.imm-top-btn:hover {
+  background: rgba(255, 255, 255, .22);
+  color: #fff
+}
+
+.imm-top-btn:active {
+  transform: scale(.88)
+}
+
+.imm-top-btn.active {
+  background: #fff;
+  color: #000
+}
+
+.imm-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(14px, 1.8vh, 26px);
+  padding: clamp(24px, 3vh, 48px);
+  width: 100%;
+  max-width: clamp(600px, 56vw, 920px);
+}
+
+/* min(vw, vh) porque la carátula tiene que caber a lo alto junto al título,
+   el progreso y el transporte: atada sólo al ancho, en una pantalla apaisada
+   empujaba los controles fuera de la vista. */
+.imm-art-wrap {
+  width: clamp(200px, min(32vw, 40vh), 440px);
+  aspect-ratio: 1;
+  border-radius: clamp(20px, 2vw, 32px);
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .7);
+  background: rgba(255, 255, 255, .06);
+}
+
+.imm-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block
+}
+
+.imm-art-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, .25)
+}
+
+.imm-info {
+  text-align: center;
+  margin-top: 4px;
+}
+
+.imm-title {
+  font-size: clamp(22px, 1.9vw, 36px);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -.3px
+}
+
+.imm-artist {
+  font-size: clamp(14px, 1.1vw, 20px);
+  color: rgba(255, 255, 255, .65);
+  margin-top: 4px
+}
+
+.imm-album {
+  font-size: clamp(12px, .9vw, 16px);
+  color: rgba(255, 255, 255, .4);
+  margin-top: 2px
+}
+
+/* Tres columnas con los laterales iguales: el transporte queda centrado y el
+   volumen tiene su propio carril reservado. Antes iba absoluto y al
+   desplegarse se montaba encima del botón de repetición; reservar el ancho
+   de antemano evita el solape sin que los controles se muevan al abrirlo
+   (los laterales miden lo mismo aunque uno esté vacío). */
+.imm-action-row {
+  /* El ancho del carril es la única cifra: la del slider se deriva de él, así
+     no hay dos números que cuadrar a mano cada vez que la vista escala. */
+  --vol-lane: clamp(120px, 11vw, 176px);
+  --vol-pad: 16px;
+  --vol-btn: 30px;
+  --vol-gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(var(--vol-lane), 1fr) auto minmax(var(--vol-lane), 1fr);
+  align-items: center;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.imm-controls {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px
+}
+
+/* row-reverse: el altavoz es el elemento más a la derecha y la fila crece
+   hacia la IZQUIERDA al desplegarse. Con el orden natural la fila iba
+   anclada por su borde derecho, así que abrir el slider empujaba el propio
+   altavoz 96px hacia dentro y al cerrar volvía de golpe a su sitio. */
+/* Pegado a los controles (start, no end): así el altavoz se queda quieto
+   junto al transporte y la barra se despliega hacia la derecha, hacia el
+   hueco vacío del carril. */
+.imm-action-row .imm-vol-row {
+  grid-column: 3;
+  justify-self: start;
+  padding-left: var(--vol-pad);
+}
+
+.imm-ctrl {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .75);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  transition: color .1s var(--ease), background .1s var(--ease), transform .08s var(--ease);
+}
+
+/* Los SVG llevan width/height fijos en el atributo; el CSS los sobreescribe
+   para que el transporte crezca con la vista en vez de quedarse en 17-24px
+   perdido bajo una carátula de 440px. */
+.imm-ctrl svg {
+  width: clamp(24px, 1.9vw, 34px);
+  height: auto;
+}
+
+.imm-ctrl-sm svg {
+  width: clamp(17px, 1.35vw, 24px);
+}
+
+.imm-play svg {
+  width: clamp(30px, 2.4vw, 42px);
+}
+
+.imm-ctrl:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, .1)
+}
+
+.imm-ctrl:active {
+  transform: scale(.9)
+}
+
+/* Sin bola blanca: sobre la carátula difuminada el disco sólido pesaba
+   demasiado y partía la fila en dos. El play manda por tamaño de icono, no
+   por fondo — igual que el resto del transporte. */
+.imm-play {
+  width: clamp(64px, 5vw, 88px);
+  height: clamp(64px, 5vw, 88px);
+  padding: 0;
+  background: none;
+  color: #fff;
+  /* sin !important: nada compite aquí, y el !important impedía que
+     prefers-reduced-motion pudiera desactivar la transición */
+  transition: color var(--d-press) var(--ease), background var(--d-press) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+.imm-play:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, .12)
+}
+
+.imm-prog-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: clamp(460px, 46vw, 720px)
+}
+
+.imm-time {
+  font-size: clamp(12px, .85vw, 15px);
+  color: rgba(255, 255, 255, .5);
+  /* el "-03:14" es un carácter más ancho que el "0:00" del principio */
+  width: clamp(40px, 3.4vw, 56px);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0
+}
+
+.imm-prog-wrap {
+  flex: 1;
+  position: relative;
+  height: 16px;
+  display: flex;
+  align-items: center
+}
+
+.imm-prog-bg {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, .2);
+  border-radius: var(--track-r);
+  transition: height var(--d-hover) var(--ease);
+}
+
+.imm-prog-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  min-width: 8px;
+  background: rgba(255, 255, 255, .9);
+  border-radius: var(--track-r);
+  pointer-events: none
+}
+
+.imm-prog-range {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 16px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none
+}
+
+.imm-prog-wrap:hover .imm-prog-bg {
+  height: 10px
+}
+
+/* smaller shuffle/repeat variant flanking the transport row */
+.imm-ctrl-sm {
+  padding: 8px
+}
+
+/* Sobre la carátula difuminada el blanco no distingue "activo" de "hover":
+   el tinte del acento sí, y de paso ata aleatorio/repetición/cola al color
+   de Ajustes de BookOS igual que en el dock. */
+.imm-ctrl.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 26%, transparent)
+}
+
+/* Volumen — el slider sólo se despliega al pasar el cursor por el altavoz */
+.imm-vol-row {
+  display: flex;
+  align-items: center;
+}
+
+.imm-mute-btn {
+  width: var(--vol-btn, 30px);
+  height: var(--vol-btn, 30px);
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .12s var(--ease);
+}
+
+.imm-mute-btn:hover {
+  color: #fff
+}
+
+.imm-mute-btn.muted {
+  color: var(--accent)
+}
+
+/* Plegado por defecto. width:0 en vez de display:none para poder animarlo, y
+   overflow:hidden para que el relleno no asome mientras está cerrado. */
+.imm-vol-track {
+  width: 0;
+  opacity: 0;
+  height: 8px;
+  background: rgba(255, 255, 255, .2);
+  border-radius: var(--track-r);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+  pointer-events: none;
+  transition: width var(--d-pop) var(--ease), opacity var(--d-pop) var(--ease), margin-left var(--d-pop) var(--ease);
+}
+
+/* .dragging incluido a propósito: si el cursor se sale de la fila a mitad de
+   un arrastre el slider seguiría recibiendo los eventos (hay pointer capture)
+   pero se cerraría en la cara del usuario. */
+.imm-vol-row:hover .imm-vol-track,
+.imm-vol-row:focus-within .imm-vol-track,
+.imm-vol-track.dragging {
+  /* Lo que sobra del carril tras la separación, el altavoz y el margen. Si se
+     pasara de ahí, el transporte se descentraría al abrir el slider. */
+  width: calc(var(--vol-lane) - var(--vol-pad) - var(--vol-btn) - var(--vol-gap));
+  opacity: 1;
+  margin-left: var(--vol-gap);
+  pointer-events: auto;
+}
+
+.imm-vol-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  min-width: 8px;
+  background: rgba(255, 255, 255, .9);
+  border-radius: var(--track-r);
+  pointer-events: none;
+}
+
+/* ── Queue panel ("Up next") — popover, slides from the right ───── */
+.queue-panel {
+  position: absolute;
+  top: 60px;
+  bottom: var(--pb-clear);
+  right: 14px;
+  width: 320px;
+  max-width: calc(100% - 28px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .05) inset, var(--sh-pop);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 65;
+  transform: translateX(calc(100% + 30px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .28s var(--ease-spring), opacity .18s var(--ease);
+}
+
+.queue-panel.active {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto
+}
+
+.qp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 10px;
+  flex-shrink: 0
+}
+
+.qp-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.2px
+}
+
+.qp-close {
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s var(--ease), color .12s var(--ease);
+}
+
+.qp-close:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.qp-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px 8px 10px
+}
+
+.qp-list::-webkit-scrollbar {
+  width: 3px
+}
+
+.qp-list::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
+}
+
+.qp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  cursor: pointer;
+  transition: background var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+.qp-item:hover {
+  background: var(--hover)
+}
+
+.qp-item:active {
+  transform: scale(.98)
+}
+
+.qp-item-cover {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.qp-item-cover-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+}
+
+.qp-item-num {
+  font-size: 12px;
+  color: var(--text-2);
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0
+}
+
+.qp-item-info {
+  min-width: 0;
+  flex: 1
+}
+
+.qp-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.qp-item-artist {
+  font-size: 11.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.qp-item-rm {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-2);
+  border-radius: 8px;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity .12s var(--ease), background .12s var(--ease), color .12s var(--ease);
+}
+
+.qp-item:hover .qp-item-rm {
+  opacity: 1
+}
+
+.qp-item-rm:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger)
+}
+
+.qp-empty {
+  display: none;
+  padding: 30px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-2)
+}
+
+.qp-empty.show {
+  display: block
+}
 
 /* ── Context menu — popover ────────────────────────────────────── */
-.ctx{
-  position:fixed;z-index:200;
-  background:var(--card);border:1px solid var(--border);
-  border-radius:18px;box-shadow:var(--sh-pop);
-  padding:6px;min-width:190px;display:none;
+.ctx {
+  position: fixed;
+  z-index: 200;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--sh-pop);
+  padding: 6px;
+  min-width: 190px;
+  display: none;
+  /* el menú sale del cursor, no del centro: openCtx() escribe la esquina real */
+  transform-origin: var(--ctx-origin, top left);
 }
-.ctx.active{display:block}
-.ctx-item{padding:9px 12px;border-radius:13px;cursor:pointer;font-size:14px;font-weight:500;transition:background .12s var(--ease)}
-.ctx-item:hover{background:var(--hover)}
-.ctx-sep{height:.5px;background:var(--divider);margin:5px 8px}
-.ctx-label{padding:5px 12px;font-size:12px;color:var(--text-2);font-weight:500;letter-spacing:.02em}
+
+.ctx.active {
+  display: block;
+  animation: ctxPop var(--d-pop) var(--ease-out)
+}
+
+@keyframes ctxPop {
+  from {
+    opacity: 0;
+    transform: scale(.96)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+.ctx-item {
+  padding: 9px 12px;
+  border-radius: 13px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out)
+}
+
+.ctx-item:hover {
+  background: var(--hover)
+}
+
+.ctx-item:active {
+  transform: scale(.97)
+}
+
+.ctx-sep {
+  height: .5px;
+  background: var(--divider);
+  margin: 5px 8px
+}
+
+.ctx-label {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+  font-weight: 500;
+  letter-spacing: .02em
+}
 
 /* ── Modal — HIG dialog ────────────────────────────────────────── */
-.modal-back{
-  position:absolute;inset:0;z-index:100;
-  background:rgba(0,0,0,.45);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  display:none;align-items:center;justify-content:center;
+.modal-back {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, .45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
 }
-.modal-back.active{display:flex;animation:fadeIn .18s var(--ease)}
-.modal{
-  background:var(--card);
-  border-radius:26px;padding:28px 24px 20px;width:310px;
-  box-shadow:var(--sh-modal);display:flex;flex-direction:column;gap:18px;
-  animation:modalPop .25s var(--ease-spring);
+
+.modal-back.active {
+  display: flex;
+  animation: fadeIn .18s var(--ease)
 }
-@keyframes modalPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:none}}
-.modal-title{font-size:17px;font-weight:700;text-align:center;line-height:1.3}
-.modal-input{
-  padding:12px 14px;border-radius:14px;
-  background:var(--surface);border:1.5px solid transparent;
-  color:var(--text);font-size:14px;outline:none;
-  font-family:inherit;-webkit-user-select:text;user-select:text;
-  transition:border-color .15s var(--ease);
+
+/* Salida: antes el modal desaparecía de golpe. Más rápida que la entrada —
+   lento donde el usuario decide, rápido donde responde el sistema. */
+.modal-back.closing {
+  animation: modalBackOut 140ms var(--ease-out) forwards
 }
-.modal-input:focus{border-color:var(--accent)}
-.modal-btns{display:flex;gap:10px}
-.modal-btns .btn-sec,.modal-btns .btn-primary{
-  flex:1;height:48px;border-radius:14px;font-size:15px;
+
+.modal-back.closing .modal {
+  animation: modalOut 140ms var(--ease-out) forwards
+}
+
+@keyframes modalBackOut {
+  to {
+    opacity: 0
+  }
+}
+
+@keyframes modalOut {
+  to {
+    opacity: 0;
+    transform: scale(.97)
+  }
+}
+
+.modal {
+  background: var(--card);
+  border-radius: 26px;
+  padding: 28px 24px 20px;
+  width: 310px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  box-shadow: var(--sh-modal);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* transform-origin: center — correcto, el modal no está anclado a un trigger */
+  animation: modalPop .25s var(--ease-spring);
+}
+
+.modal::-webkit-scrollbar {
+  width: 4px
+}
+
+.modal::-webkit-scrollbar-thumb {
+  background: var(--divider);
+  border-radius: 2px
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: scale(.94)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3
+}
+
+.modal-input {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1.5px solid transparent;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+  -webkit-user-select: text;
+  user-select: text;
+  transition: border-color .15s var(--ease);
+}
+
+.modal-input:focus {
+  border-color: var(--accent)
+}
+
+.modal-btns {
+  display: flex;
+  gap: 10px
+}
+
+.modal-btns .btn-sec,
+.modal-btns .btn-primary {
+  flex: 1;
+  height: 48px;
+  border-radius: 14px;
+  font-size: 15px;
+}
+
+/* ── Modal de formulario (editar lista) ─────────────────────────── */
+.modal.modal-form {
+  width: 380px;
+  gap: 14px;
+  text-align: left;
+}
+
+.mf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mf-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: .02em;
+}
+
+.mf-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Selector de color libre: sin presets, el usuario elige el suyo */
+.mf-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.mf-check input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.mf-mini {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.mf-angle-row {
+  gap: 10px
+}
+
+.mf-color {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mf-color::-webkit-color-swatch-wrapper {
+  padding: 0
+}
+
+.mf-color::-webkit-color-swatch {
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+}
+
+.mf-angle {
+  flex: 1;
+  min-width: 90px;
+  accent-color: var(--accent);
+}
+
+/* ── Vista de lista: cuadrícula y densidad ──────────────────────── */
+.track-table[data-view="grid"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  padding: 14px;
+  align-content: start;
+}
+
+.track-table[data-view="grid"] .tr {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  padding: 8px;
+  gap: 8px;
+  background: var(--hover);
+}
+
+.track-table[data-view="grid"] .tr-num,
+.track-table[data-view="grid"] .tr-eq,
+.track-table[data-view="grid"] .tr-play-icon,
+.track-table[data-view="grid"] .tr-artist,
+.track-table[data-view="grid"] .tr-album,
+.track-table[data-view="grid"] .tr-dur {
+  display: none
+}
+
+.track-table[data-view="grid"] .tr-title-wrap {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.track-table[data-view="grid"] .tr-cover,
+.track-table[data-view="grid"] .tr-cover-ph {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 12px;
+}
+
+.track-table[data-view="grid"] .tr-like,
+.track-table[data-view="grid"] .tr-remove {
+  position: absolute;
+  top: 12px;
+  opacity: 0;
+  background: rgba(0, 0, 0, .45);
+  border-radius: 999px;
+  padding: 4px;
+  transition: opacity var(--d-hover) var(--ease);
+}
+
+.track-table[data-view="grid"] .tr-like {
+  right: 12px
+}
+
+.track-table[data-view="grid"] .tr-remove {
+  left: 12px
+}
+
+.track-table[data-view="grid"] .tr:hover .tr-like,
+.track-table[data-view="grid"] .tr:hover .tr-remove,
+.track-table[data-view="grid"] .tr-like.active {
+  opacity: 1
+}
+
+/* Densidad compacta: menos alto de fila y portada más pequeña */
+.track-table[data-density="compact"] .tr {
+  height: 38px;
+  border-radius: 11px;
+}
+
+.track-table[data-density="compact"] .tr-cover,
+.track-table[data-density="compact"] .tr-cover-ph {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.track-table[data-density="compact"] .tr-title {
+  font-size: 13px
+}
+
+/* Botones de vista/densidad de la cabecera de lista */
+.pl-view-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 2px;
+}
+
+.pl-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 30px;
+  border: none;
+  background: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text-2);
+  transition: background var(--d-hover) var(--ease), color var(--d-hover) var(--ease), transform var(--d-press) var(--ease-out);
+}
+
+.pl-view-btn:active {
+  transform: scale(.94)
+}
+
+.pl-view-btn.active {
+  background: var(--card);
+  color: var(--pl-accent, var(--accent));
+  box-shadow: var(--sh-rest);
+}
+
+/* ── Stagger de entrada ─────────────────────────────────────────── */
+/* Solo en cuadrículas y detalles, nunca en la vista Canciones: allí se
+   renderiza en bloques de 250 filas por frame y el retardo la haría lenta. */
+.stagger-in {
+  opacity: 0;
+  animation: staggerIn 260ms var(--ease-out) forwards;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+@keyframes staggerIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px)
+  }
+
+  to {
+    opacity: 1;
+    transform: none
+  }
+}
+
+/* ── Modo visual "Blur" ─────────────────────────────────────────── */
+/* main.js alternaba .blur-mode/.oled-mode desde Ajustes, pero .blur-mode no
+   tenía ni una regla: el ajuste no hacía nada. */
+.blur-mode .sidebar-scroll .sb-card,
+.blur-mode .player-bar,
+.blur-mode .track-table,
+.blur-mode .pl-header,
+.blur-mode .album-card,
+.blur-mode .artist-card,
+.blur-mode .settings-card {
+  background: color-mix(in srgb, var(--accent) 9%, var(--card));
+}
+
+.blur-mode .player-bar,
+.blur-mode .queue-panel {
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  background: color-mix(in srgb, var(--accent) 12%, color-mix(in srgb, var(--card) 82%, transparent));
+}
+
+.blur-mode #app {
+  background:
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 22%, transparent) 0%, transparent 55%),
+    radial-gradient(circle at 88% 100%, color-mix(in srgb, var(--accent-2) 18%, transparent) 0%, transparent 55%),
+    var(--bg);
+}
+
+/* ── Movimiento reducido ────────────────────────────────────────── */
+/* Reducido no es cero: se conservan opacidad y color (ayudan a entender el
+   cambio de estado) y se quitan desplazamientos, escalas y bucles. */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-property: opacity, background-color, background, color, border-color, filter !important;
+    transition-duration: 120ms !important;
+  }
+
+  .view.active,
+  .stagger-in {
+    animation: none;
+    opacity: 1;
+  }
+
+  .eq-bar {
+    animation: none;
+    transform: scaleY(.7)
+  }
+
+  .sidebar,
+  .queue-panel,
+  .immersive {
+    transition: opacity 120ms linear !important
+  }
+
+  /* estos paneles se posicionan con transform: sin transición, pero deben
+     seguir llegando a su sitio final */
+  .immersive.active,
+  .queue-panel.active {
+    transform: none
+  }
 }
 
 /* ── Misc ──────────────────────────────────────────────────────── */
-*:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
-*{scrollbar-width:thin;scrollbar-color:var(--divider) transparent}
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--divider) transparent
+}
