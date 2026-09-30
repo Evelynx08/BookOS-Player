@@ -8,7 +8,11 @@
 // Va en un fichero aparte y no dentro de main.js para que el reproductor siga
 // arrancando igual si esto falla: un error aquí no se lleva por delante la UI.
 (() => {
-  const { invoke, event } = window.__TAURI__ || {};
+  // En Tauri 2 `invoke` cuelga de `core`, no de la raíz como en Tauri 1:
+  // leído de la raíz salía undefined y el puente se apagaba entero en
+  // silencio, sin MPRIS propio ni isla en el escritorio.
+  const invoke = window.__TAURI__?.core?.invoke;
+  const event = window.__TAURI__?.event;
   if (!invoke || !event) return;
 
   const REPEAT_TO_LOOP = { none: 'None', all: 'Playlist', one: 'Track' };
@@ -50,6 +54,8 @@
   let pending = null;
   let activityCover = '';
   let activityCoverAt = 0;
+  let activityQueueKey = '';
+  let activityQueueAt = 0;
   function publish() {
     // Se agrupan las ráfagas: al cargar una pista saltan playing/durationchange/
     // timeupdate casi a la vez y no hace falta mandar tres veces lo mismo.
@@ -69,6 +75,12 @@
       if (sendCover) { activityCover = current.art_url || ''; activityCoverAt = now; }
       const queueStart = Math.max(0, mpris.index - 2);
       const activityQueue = mpris.queue.slice(queueStart, queueStart + 20);
+      // Las carátulas de la cola, igual que la principal: solo cuando cambian
+      // las pistas visibles (o cada 30 s por si el escritorio se reinició).
+      // Mandarlas en cada latido de 1 s serían varios MB por segundo por D-Bus.
+      const queueKey = activityQueue.map(t => t.path + (t.art_url ? '*' : '')).join('\n');
+      const sendQueueCovers = queueKey !== activityQueueKey || now - activityQueueAt > 30000;
+      if (sendQueueCovers) { activityQueueKey = queueKey; activityQueueAt = now; }
       invoke('bookos_activity_publish', {
         appId: 'com.bookos.player', kind: 'player', state: {
           activo: mpris.status === 'Playing',
@@ -82,10 +94,12 @@
           cola: activityQueue.map((t, i) => ({
             id: t.path, titulo: t.title, artista: t.artist,
             favorita: !!t.favorite, actual: queueStart + i === mpris.index,
+            // La isla solo pinta cuatro filas.
+            portada: sendQueueCovers && i < 4 ? (t.art_url || '') : '',
           })),
         }
       }).catch(() => { });
-    }, 120);
+    }, 40);
   }
 
   ['playing', 'pause', 'ended', 'volumechange', 'seeked', 'durationchange', 'loadedmetadata']
@@ -94,7 +108,7 @@
     .forEach(e => document.querySelectorAll('audio').forEach(el => el.addEventListener(e, publish)));
   // La posición se refresca aparte y despacio: nadie necesita precisión de
   // milisegundo, y Position no emite PropertiesChanged por spec.
-  setInterval(() => { if (!audio.paused) publish(); }, 2000);
+  setInterval(() => { if (!audio.paused) publish(); }, 1000);
 
   // Red de seguridad para los cambios que no pasan por el <audio>: reordenar la
   // cola, marcar un favorito desde la lista, cambiar shuffle o repeat.

@@ -35,22 +35,18 @@ body {
   --dyn-rgb: 124, 92, 252;
   --accent: var(--dyn);
 
-  --text: #ffffff;
-  --text-2: #8e8e93;
-  --divider: rgba(255, 255, 255, .08);
-  --border: rgba(255, 255, 255, .06);
-  --hover: rgba(255, 255, 255, .06);
-  --active: rgba(255, 255, 255, .10);
-  --surface: rgba(255, 255, 255, .08);
-  --toggle-off: #48484a;
+  /* Cada token apunta primero al de la paleta de Ajustes (--tx, --div…, que
+     inyecta bookos-palette.js) y sólo sin paleta cae al valor propio. */
+  --text: var(--tx, #ffffff);
+  --text-2: var(--tx2, #8e8e93);
+  --divider: var(--div, rgba(255, 255, 255, .08));
+  --border: var(--brd, rgba(255, 255, 255, .06));
+  --hover: var(--hov, rgba(255, 255, 255, .06));
+  --active: var(--act, rgba(255, 255, 255, .10));
+  --surface: var(--sbg, rgba(255, 255, 255, .08));
+  --toggle-off: var(--toff, #48484a);
   --danger: #ff453a;
   --success: #30d158;
-
-  /* legacy aliases still referenced across the sheet */
-  --tx: var(--text);
-  --tx2: var(--text-2);
-  --tx3: var(--text-2);
-  --div: var(--divider);
 
   /* selected-state fill (tint at 10-12%) */
   --sel: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -124,14 +120,14 @@ body {
 }
 
 .light-mode {
-  --text: #000000;
-  --text-2: #8e8e93;
-  --divider: rgba(0, 0, 0, .08);
-  --border: rgba(0, 0, 0, .10);
-  --hover: rgba(0, 0, 0, .04);
-  --active: rgba(0, 0, 0, .08);
-  --surface: rgba(0, 0, 0, .06);
-  --toggle-off: #e0e0e0;
+  --text: var(--tx, #000000);
+  --text-2: var(--tx2, #8e8e93);
+  --divider: var(--div, rgba(0, 0, 0, .08));
+  --border: var(--brd, rgba(0, 0, 0, .10));
+  --hover: var(--hov, rgba(0, 0, 0, .04));
+  --active: var(--act, rgba(0, 0, 0, .08));
+  --surface: var(--sbg, rgba(0, 0, 0, .06));
+  --toggle-off: var(--toff, #e0e0e0);
   --danger: #ff3b30;
   --success: #34c759;
 
@@ -726,6 +722,10 @@ body {
   cursor: pointer;
   transition: background .12s var(--ease), transform .1s var(--ease);
   position: relative;
+  /* Las filas fuera de pantalla no se maquetan ni se pintan: con la
+     biblioteca entera en el DOM, el scroll recalculaba todas. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
 }
 
 .tr:hover {
@@ -2475,7 +2475,6 @@ body {
   height: 25%;
   background-size: cover;
   background-position: center;
-  filter: blur(15px) saturate(1.7) brightness(.28);
   transform-origin: top left;
   transform: scale(4.8);
   opacity: 0;
@@ -2486,26 +2485,101 @@ body {
   opacity: 1
 }
 
-.oled-mode .imm-bg {
-  filter: blur(15px) saturate(1.3) brightness(.12)
+/* Fondo vivo a lo Apple Music: dos copias de la portada que giran despacio en
+   sentidos opuestos, tan difuminadas que sólo quedan manchas de color. Sólo se
+   anima transform y todo vive en la capa de 1/4 de tamaño: 1/16 de los
+   píxeles de la ventana. Ciclos largos (40 s y 29 s, primos entre
+   sí) para que el patrón no se note repetirse. */
+.imm-bg::before,
+.imm-bg::after {
+  content: '';
+  position: absolute;
+  background-image: var(--art);
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+  /* El blur sólo alisa las aristas del estirado bilineal de la imagen de
+     6×6 (colorField); la forma de la portada ya no está en la imagen. */
+  filter: blur(12px) saturate(1.8) brightness(.85);
 }
 
-/* colores dinámicos: cuando hay portada, esto la tiñe; sin portada, son las
-   únicas manchas de color sobre el negro — nunca queda una página muerta. */
+.imm-bg::before {
+  /* Círculo que tapa la capa apaisada en cualquier ángulo: 170 % del ancho,
+     centrado; el margin-top en % también va contra el ancho. */
+  width: 170%;
+  aspect-ratio: 1;
+  left: -35%;
+  top: 50%;
+  margin-top: -85%;
+  animation: imm-spin 40s linear infinite;
+}
+
+.imm-bg::after {
+  width: 90%;
+  aspect-ratio: 1;
+  right: -25%;
+  bottom: -35%;
+  opacity: .85;
+  animation: imm-spin 29s linear infinite reverse;
+}
+
+@keyframes imm-spin {
+  to {
+    transform: rotate(360deg)
+  }
+}
+
+/* Sin animar lo que no se ve: la capa que ya salió del fundido y todo el
+   inmersivo cerrado (visibility:hidden no para las animaciones). */
+.imm-bg:not(.show)::before,
+.imm-bg:not(.show)::after,
+.immersive:not(.active) .imm-bg::before,
+.immersive:not(.active) .imm-bg::after {
+  animation-play-state: paused;
+}
+
+.oled-mode .imm-bg::before,
+.oled-mode .imm-bg::after {
+  filter: blur(12px) saturate(1.8) brightness(.7)
+}
+
+/* Degradado sacado de la portada: --imm-c1 es su esquina superior izquierda
+   y --imm-c2 la inferior derecha (applyDyn). Sin portada caen al acento y a
+   --accent-2 de la paleta, así nunca queda una página muerta. Van registradas
+   con @property para que el cambio de canción funda en vez de saltar. El
+   negro de abajo es para que título y controles se lean sobre cualquier color. */
+@property --imm-c1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --imm-c2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
 .imm-scrim {
   position: absolute;
   inset: 0;
+  --c1: var(--imm-c1);
+  --c2: var(--imm-c2);
   background:
-    radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent-2) 38%, transparent) 0%, transparent 55%),
-    radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--accent) 32%, transparent) 0%, transparent 55%),
-    rgba(0, 0, 0, .3);
+    linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, .5) 100%),
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--c1) 70%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--c2) 65%, transparent) 0%, transparent 70%),
+    linear-gradient(135deg, color-mix(in srgb, var(--c1) 20%, transparent), color-mix(in srgb, var(--c2) 20%, transparent)),
+    rgba(0, 0, 0, .1);
+  transition: --imm-c1 .6s var(--ease-out), --imm-c2 .6s var(--ease-out);
 }
 
 .oled-mode .imm-scrim {
   background:
-    radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--accent-2) 28%, transparent) 0%, transparent 55%),
-    radial-gradient(circle at 80% 85%, color-mix(in srgb, var(--accent) 24%, transparent) 0%, transparent 55%),
-    rgba(0, 0, 0, .6);
+    linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, .65) 100%),
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--c1) 50%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse at 100% 100%, color-mix(in srgb, var(--c2) 45%, transparent) 0%, transparent 70%),
+    rgba(0, 0, 0, .25);
 }
 
 /* Top-right actions: queue + close */
@@ -3060,6 +3134,58 @@ body {
 
 .qp-empty.show {
   display: block
+}
+
+/* Cola dentro del inmersivo (openImmersive la mueve ahí). El texto es blanco
+   siempre, como el resto del inmersivo: el lienzo es oscuro en ambos temas.
+   Sin backdrop-filter: debajo ya está la portada difuminada, y un segundo
+   blur a esa altura se paga en cada frame del fundido de carátula. */
+.immersive {
+  /* Sin portada: acento y --accent-2 de la paleta. applyDyn los pisa en línea. */
+  --imm-c1: var(--accent);
+  --imm-c2: var(--accent-2);
+  --imm-queue-w: clamp(300px, 28vw, 420px);
+  --imm-gap: clamp(24px, 3vw, 48px);
+}
+
+.immersive .queue-panel {
+  --text: #fff;
+  --text-2: rgba(255, 255, 255, .55);
+  --hover: rgba(255, 255, 255, .08);
+  --surface: rgba(255, 255, 255, .1);
+  --divider: rgba(255, 255, 255, .14);
+  top: 60px;
+  bottom: var(--imm-gap);
+  right: var(--imm-gap);
+  width: var(--imm-queue-w);
+  color: var(--text);
+  background: rgba(0, 0, 0, .28);
+  border-color: rgba(255, 255, 255, .08);
+  box-shadow: none;
+  cursor: auto;
+}
+
+/* La carátula y el transporte se centran en lo que deja la columna, no en la
+   ventana entera: si no, quedarían montados bajo la cola. */
+.immersive:has(.queue-panel.active) .imm-body {
+  margin-right: calc(var(--imm-queue-w) + var(--imm-gap));
+}
+
+/* Con la cola al lado sobra alto y falta ancho: la carátula puede crecer
+   hasta ser el elemento principal sin empujar el transporte fuera. */
+.immersive:has(.queue-panel.active) .imm-art-wrap {
+  width: clamp(240px, min(34vw, 50vh), 520px);
+}
+
+/* .blur-mode .queue-panel va más abajo con la misma especificidad. */
+.blur-mode .immersive .queue-panel {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(0, 0, 0, .28);
+}
+
+.immersive .imm-body {
+  transition: margin-right var(--d-panel) var(--ease-out);
 }
 
 /* ── Context menu — popover ────────────────────────────────────── */

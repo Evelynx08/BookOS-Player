@@ -319,19 +319,10 @@ function extractColor(src) {
         const c = document.createElement('canvas'); c.width = c.height = 24;
         const cx = c.getContext('2d'); cx.drawImage(img, 0, 0, 24, 24);
         const d = cx.getImageData(0, 0, 24, 24).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < d.length; i += 8) {
-          const lum = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2];
-          if (lum < 20 || lum > 235) continue;
-          r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
-        }
-        if (!n) { resolve(null); return; }
-        r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
-        const mid = (r + g + b) / 3, f = 1.55;
-        r = Math.min(255, Math.round(mid + (r - mid) * f));
-        g = Math.min(255, Math.round(mid + (g - mid) * f));
-        b = Math.min(255, Math.round(mid + (b - mid) * f));
-        resolve({ hex: `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`, rgb: `${r},${g},${b}` });
+        const main = avgColor(d, () => true);
+        if (!main) { resolve(null); return; }
+        const [a, b] = twoHues(d);
+        resolve({ ...main, a: (a || main).hex, b: (b || a || main).hex });
       } catch { resolve(null); }
     };
     img.onerror = () => resolve(null);
@@ -339,17 +330,65 @@ function extractColor(src) {
   });
 }
 
-// El acento sale de la carátula que suena. Sin carátula no se inventa un color:
-// se quitan las variables inline y manda el valor de :root, que a su vez apunta
-// al acento del sistema (--blue de la paleta de BookOS Settings). Así la app va
-// siempre a juego con el escritorio en vez de con un color propio.
+// Media de los píxeles de 24×24 que cumplen `inRegion`, sin los casi negros ni
+// casi blancos (no dicen nada del color) y con la saturación subida un 55 %.
+function avgColor(d, inRegion) {
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < d.length; i += 8) {
+    const p = i / 4;
+    if (!inRegion(p % 24, Math.floor(p / 24))) continue;
+    const lum = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2];
+    if (lum < 20 || lum > 235) continue;
+    r += d[i]; g += d[i + 1]; b += d[i + 2]; n++;
+  }
+  if (!n) return null;
+  r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
+  const mid = (r + g + b) / 3, f = 1.55;
+  const sat = v => Math.max(0, Math.min(255, Math.round(mid + (v - mid) * f)));
+  r = sat(r); g = sat(g); b = sat(b);
+  return { hex: '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join(''), rgb: `${r},${g},${b}` };
+}
+
+// Los dos tonos que más pesan en la portada, para el degradado de pantalla
+// completa. Se probó con la media de dos esquinas y en portadas de fondo negro
+// salía gris: lo que da carácter es el color saturado, esté donde esté.
+// Cubos de 30° de tono, cada píxel pesa su saturación; el segundo tono tiene
+// que estar a más de 60° del primero para que el degradado no sea monocromo.
+function twoHues(d) {
+  const buckets = Array.from({ length: 12 }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max < 40 || max - min < 40) continue;          // negros y grises
+    const sat = (max - min) / max;
+    let h = max === r ? (g - b) / (max - min) : max === g ? 2 + (b - r) / (max - min) : 4 + (r - g) / (max - min);
+    h = ((h * 60) + 360) % 360;
+    const k = buckets[Math.floor(h / 30)];
+    k.w += sat; k.r += r * sat; k.g += g * sat; k.b += b * sat;
+  }
+  const order = buckets.map((k, i) => ({ ...k, i })).filter(k => k.w > 0).sort((x, y) => y.w - x.w);
+  const first = order[0];
+  if (!first) return [null, null];
+  const second = order.find(k => Math.min(Math.abs(k.i - first.i), 12 - Math.abs(k.i - first.i)) > 2);
+  const toColor = k => {
+    const [r, g, b] = [k.r, k.g, k.b].map(v => Math.round(v / k.w));
+    return { hex: '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('') };
+  };
+  return [toColor(first), second ? toColor(second) : null];
+}
+
+// El acento de la app es el de Ajustes (--blue de la paleta de BookOS); el
+// color de la carátula sólo tiñe la pantalla completa, que es donde la
+// carátula manda. Antes pisaba --dyn en toda la app y el color elegido en
+// Ajustes no se veía nunca mientras sonara algo con portada.
 function applyDyn(color) {
+  const imm = $('immersive');
   if (color?.hex) {
-    app.style.setProperty('--dyn', color.hex);
-    app.style.setProperty('--dyn-rgb', color.rgb);
+    imm.style.setProperty('--accent', color.hex);
+    imm.style.setProperty('--imm-c1', color.a);
+    imm.style.setProperty('--imm-c2', color.b);
   } else {
-    app.style.removeProperty('--dyn');
-    app.style.removeProperty('--dyn-rgb');
+    ['--accent', '--imm-c1', '--imm-c2'].forEach(v => imm.style.removeProperty(v));
   }
 }
 
@@ -373,8 +412,28 @@ function applyVisual(v) {
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
-async function saveState() {
-  await invoke('save_state', { state: { ...state, queue: state.queue.map(t => t.path) } }).catch(() => { });
+// Las carátulas no se guardan: loadCovers() las vuelve a leer del archivo. Con
+// ellas en imported_tracks e history el state.json llegó a 157 MB, y cada
+// guardado costaba 0,6 s solo en Rust (medido), unas tres veces por cambio de
+// pista y con la ventana congelada.
+const withoutCover = ({ cover, ...t }) => t;
+// Un cambio de pista llama a saveState() desde varios sitios seguidos; con
+// agruparlos en un solo guardado basta.
+let _saveTimer = null;
+function saveState() {
+  clearTimeout(_saveTimer);
+  return new Promise(resolve => {
+    _saveTimer = setTimeout(() => {
+      invoke('save_state', {
+        state: {
+          ...state,
+          queue: state.queue.map(t => t.path),
+          imported_tracks: state.imported_tracks.map(withoutCover),
+          history: state.history.map(withoutCover),
+        }
+      }).catch(err => console.error('save_state:', err)).then(resolve);
+    }, 300);
+  });
 }
 async function loadState() {
   const s = await invoke('load_state').catch(() => ({}));
@@ -403,11 +462,11 @@ async function scanAll() {
   for (const t of state.imported_tracks) {
     if (!seen.has(t.path)) { seen.add(t.path); library.push(t); }
   }
-  renderSongs();
-  renderAlbums();
-  renderArtists();
-  renderFavorites();
-  renderHome();
+  if (currentView === 'songs') renderSongs();
+  if (currentView === 'albums') renderAlbums();
+  if (currentView === 'artists') renderArtists();
+  if (currentView === 'favorites') renderFavorites();
+  if (currentView === 'home') renderHome();
   updatePlaylistNav();
   loadCovers();
 }
@@ -421,23 +480,69 @@ async function loadCovers() {
   coversLoading = true;
   const byPath = new Map(library.map(t => [t.path, t]));
   const pending = library.filter(t => !t.cover).map(t => t.path);
-  const CHUNK = 40;
+  const CHUNK = 12;
   try {
     for (let i = 0; i < pending.length; i += CHUNK) {
       const slice = pending.slice(i, i + CHUNK);
       const got = await invoke('read_covers', { paths: slice }).catch(() => []);
-      let changed = false;
+      const changed = [];
       for (const [path, cover] of got) {
         const t = byPath.get(path);
-        if (t && cover) { t.cover = cover; changed = true; }
+        if (!t || !cover) continue;
+        t.cover = await makeThumb(cover);
+        if (t.cover) changed.push(t);
       }
-      if (changed) { renderSongs(); renderAlbums(); }
+      if (changed.length) paintRowCovers(changed);
       // Ceder el hilo entre trozos para que la interfaz siga respondiendo.
       await new Promise(r => setTimeout(r, 0));
     }
   } finally {
     coversLoading = false;
   }
+  // La rejilla se pinta una vez al final: reconstruirla por cada lote era la
+  // mayor parte del tiempo de arranque.
+  if (currentView === 'albums') renderAlbums();
+  if (currentView === 'home') renderHome();
+  const cur = state.queue[state.current_index];
+  if (cur && cur.cover) updateNowPlaying(cur);
+}
+
+// Las carátulas embebidas miden de media 650 KB (hasta 1,5 MB, 1280×720 en
+// PNG) y cada fila de 34 px decodificaba la original: 140 MB en base64 vivos
+// en la página y el scroll a tirones. Se guarda sólo una miniatura; la
+// original se pide aparte para la pantalla completa (loadFullArt).
+// 384 px cubre la tarjeta de álbum más grande a escala 2.
+const THUMB_PX = 384;
+async function makeThumb(src) {
+  const img = new Image();
+  img.src = src;
+  try {
+    await img.decode();
+  } catch (err) {
+    console.error('carátula ilegible:', err);
+    return null;
+  }
+  const k = Math.min(1, THUMB_PX / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.naturalWidth * k);
+  c.height = Math.round(img.naturalHeight * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', .85);
+}
+
+// Recorre las filas una vez por lote; buscar cada pista por separado hacía
+// que el coste creciera con el producto entre portadas y filas visibles.
+function paintRowCovers(tracks) {
+  const byPath = new Map(tracks.map(t => [t.path, t.cover]));
+  document.querySelectorAll('.tr .tr-cover-ph').forEach(ph => {
+    const cover = byPath.get(ph.closest('.tr')?.dataset.path);
+    if (!cover) return;
+    const img = document.createElement('img');
+    img.className = 'tr-cover';
+    img.alt = '';
+    img.src = cover;
+    ph.replaceWith(img);
+  });
 }
 
 // ── View switching ─────────────────────────────────────────────────────────
@@ -448,6 +553,9 @@ function showView(name) {
   document.querySelectorAll('.sb-pl-item').forEach(b => b.classList.remove('active'));
   const v = $(`view-${name}`);
   if (v) v.classList.add('active');
+  if (name === 'songs') renderSongs();
+  if (name === 'albums') renderAlbums();
+  if (name === 'artists') renderArtists();
   if (name === 'favorites') renderFavorites();
   if (name === 'home') renderHome();
 }
@@ -796,7 +904,9 @@ function renderFavorites() {
 // ── Home view ──────────────────────────────────────────────────────────────
 function renderHome() {
   const cur = state.current_index >= 0 ? state.queue[state.current_index] : null;
-  const resumeTrack = cur || state.history[0] || null;
+  const last = state.history[0];
+  // El historial guardado ya no lleva carátula: se toma la de la biblioteca.
+  const resumeTrack = cur || (last && (library.find(t => t.path === last.path) || last)) || null;
   const card = $('resumeCard');
   if (resumeTrack) {
     card.style.display = '';
@@ -1530,11 +1640,46 @@ function updateNowPlaying(t) {
   $('immAlbum').textContent = t.album || '';
   if (t.cover) {
     $('immArt').src = t.cover; $('immArt').style.display = 'block'; $('immArtPh').style.display = 'none';
-    setImmersiveBg(`url('${t.cover}')`);
+    colorField(t.cover).then(url => {
+      if (state.queue[state.current_index]?.path === t.path) setImmersiveBg(url ? `url('${url}')` : '');
+    });
+    loadFullArt(t.path);
   } else {
     $('immArt').style.display = 'none'; $('immArtPh').style.display = 'flex';
     setImmersiveBg('');
   }
+}
+
+// Fondo de pantalla completa: la portada reducida a 6×6 píxeles, cada uno la
+// media de su zona, que luego CSS estira a toda la ventana. Quedan campos de
+// color suaves sin ninguna forma reconocible. Se probó con blur de CSS sobre la
+// portada girando, y WebKit no aplica bien el filtro a capas animadas: en la
+// app se leían las letras de la carátula. Esto no depende del filtro.
+// Reducción en dos pasos (→48→6): de golpe, drawImage muestrea en vez de
+// promediar y salen colores de píxeles sueltos.
+async function colorField(src) {
+  const img = new Image();
+  img.src = src;
+  try {
+    await img.decode();
+  } catch (err) {
+    console.error('carátula ilegible:', err);
+    return null;
+  }
+  const step = n => { const c = document.createElement('canvas'); c.width = c.height = n; return c; };
+  const mid = step(48), out = step(6);
+  mid.getContext('2d').drawImage(img, 0, 0, 48, 48);
+  out.getContext('2d').drawImage(mid, 0, 0, 6, 6);
+  return out.toDataURL('image/png');
+}
+
+// La portada grande de pantalla completa, a tamaño original. El fondo se queda
+// con la miniatura: va difuminado y a 1/4 de tamaño, no se nota.
+function loadFullArt(path) {
+  invoke('read_covers', { paths: [path] }).then(([got]) => {
+    const full = got && got[1];
+    if (full && state.queue[state.current_index]?.path === path) $('immArt').src = full;
+  }).catch(err => console.error('read_covers:', err));
 }
 
 // Dos capas alternándose: `background-image` no es interpolable, así que la
@@ -1550,7 +1695,9 @@ function setImmersiveBg(image) {
   const layers = [$('immBg'), $('immBg2')];
   const front = layers[immBgFront];
   const back = layers[1 - immBgFront];
-  back.style.backgroundImage = image;
+  // Variable y no background-image: la pintan las dos copias giratorias de
+  // dentro (::before/::after), no la capa.
+  back.style.setProperty('--art', image || 'none');
   back.classList.add('show');
   front.classList.remove('show');
   immBgFront = 1 - immBgFront;
@@ -1756,9 +1903,18 @@ syncMaximizedState();
 appWindow.onResized(syncMaximizedState).catch(() => { });
 
 // ── Immersive ──────────────────────────────────────────────────────────────
+// Con sitio, la cola vive dentro del inmersivo como columna fija: se mueve
+// con él al arrastrar para cerrar y comparte su fondo. En estrecho no cabe
+// junto a la carátula y sigue siendo el popover de siempre.
+const immWide = window.matchMedia('(min-width: 900px)');
 function openImmersive() {
   $('immersive').classList.add('active');
   syncImmFavorite();
+  if (!immWide.matches) return;
+  $('immersive').appendChild($('queuePanel'));
+  renderQueuePanel();
+  $('queuePanel').classList.add('active');
+  document.querySelectorAll('.js-queue-btn').forEach(b => b.classList.add('active'));
 }
 
 // La cola se abre POR ENCIMA del inmersivo; al salir hay que cerrarla también.
@@ -1768,6 +1924,7 @@ function closeImmersive() {
   $('immersive').classList.remove('active');
   $('immersive').style.transform = '';
   closeQueuePanel();
+  app.appendChild($('queuePanel'));
 }
 
 $('pbArt').addEventListener('click', openImmersive);
@@ -1800,7 +1957,7 @@ $('immFav').addEventListener('click', () => {
 
   el.addEventListener('pointerdown', e => {
     // Sólo desde zonas muertas: no robar el gesto a botones ni a los sliders.
-    if (e.target.closest('button, input, .imm-prog-wrap, .imm-vol-track, .imm-vol-row')) return;
+    if (e.target.closest('button, input, .imm-prog-wrap, .imm-vol-track, .imm-vol-row, .queue-panel')) return;
     if (dragging) return;                       // multitáctil: se ignora el segundo dedo
     dragging = true;
     startY = e.clientY; startAt = Date.now(); offset = 0;
@@ -1877,8 +2034,8 @@ $('searchInput').addEventListener('input', e => {
   searchQuery = e.target.value.trim().toLowerCase();
   clearTimeout(_searchDebounce);
   _searchDebounce = setTimeout(() => {
-    renderSongs();
     if (currentView !== 'songs') showView('songs');
+    else renderSongs();
   }, 120);
 });
 
@@ -1917,6 +2074,7 @@ async function importFiles(playlistId) {
     let t = byPath.get(p);
     if (!t) {
       t = await invoke('read_track_meta', { path: p }).catch(() => ({ path: p }));
+      if (t.cover) t.cover = await makeThumb(t.cover);
       library.push(t);
       byPath.set(p, t);
     }
@@ -2047,7 +2205,7 @@ function showCtx(x, y, track) {
   ctx.classList.add('active');
   const pls = $('ctxPls'); pls.innerHTML = '';
   if (!state.playlists.length) {
-    pls.innerHTML = `<div style="padding:5px 12px;font-size:12px;color:var(--tx3)">${T.noLists}</div>`;
+    pls.innerHTML = `<div style="padding:5px 12px;font-size:12px;color:var(--text-2)">${T.noLists}</div>`;
   } else {
     state.playlists.forEach(pl => {
       const item = document.createElement('div');

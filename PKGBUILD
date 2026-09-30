@@ -24,7 +24,8 @@ package() {
   install -Dm644 "src-tauri/icons/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/bookos-player.png"
   install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/bookos-player.desktop" <<-EOF
 	[Desktop Entry]
-	Name=Reproductor - Player
+	Name=Player
+	Name[es]=Reproductor
 	Comment=BookOS Player
 	Exec=bookos-player
 	Icon=bookos-player

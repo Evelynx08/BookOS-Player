@@ -56,11 +56,26 @@ fn load_state() -> serde_json::Value {
     })
 }
 
+/// `async` para no ocupar el hilo principal: los comandos síncronos corren ahí
+/// y congelan la ventana mientras escriben.
+///
+/// Se escribe a un temporal y se renombra: con `fs::write` directo, cerrar la
+/// app a mitad dejaba el JSON cortado, `load_state` no lo podía leer y se
+/// volvía al estado de fábrica, sin listas ni carpetas.
 #[tauri::command]
-fn save_state(state: serde_json::Value) -> Result<(), String> {
-    let p = config_path();
-    let s = serde_json::to_string_pretty(&state).map_err(|e| e.to_string())?;
-    fs::write(&p, s).map_err(|e| e.to_string())
+async fn save_state(state: serde_json::Value) -> Result<(), String> {
+    // Dos guardados seguidos escribirían el mismo temporal a la vez.
+    static GUARDANDO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    tauri::async_runtime::spawn_blocking(move || {
+        let _turno = GUARDANDO.lock().map_err(|e| e.to_string())?;
+        let p = config_path();
+        let tmp = p.with_extension("json.tmp");
+        let s = serde_json::to_string(&state).map_err(|e| e.to_string())?;
+        fs::write(&tmp, s).map_err(|e| e.to_string())?;
+        fs::rename(&tmp, &p).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -214,8 +229,48 @@ async fn read_image_as_data_url(path: String) -> Result<String, String> {
     .map_err(|e| e.to_string())?
 }
 
+/// El tema del escritorio, preguntado al portal XDG.
+///
+/// Va **antes** que `kreadconfig6`: esa orden solo sabe de Plasma y lee el
+/// `kdeglobals` del usuario, que en una sesión BookOS no lo escribe nadie —el
+/// tema se elige en la tarjeta de Apariencia y vive en `panel.conf`—, así que
+/// la app se quedaba con el tema con el que se instaló el sistema. El portal
+/// lo sirve la sesión que esté corriendo: BookOS desde el propio compositor,
+/// y Plasma y GNOME también, de modo que esto funciona en las tres.
+///
+/// `color-scheme`: 1 oscuro, 2 claro, 0 sin preferencia. `gdbus` viene con
+/// GLib, que ya es dependencia de cualquier app Tauri: no añade nada.
+fn portal_color_scheme() -> Option<String> {
+    let salida = std::process::Command::new("gdbus")
+        .args([
+            "call",
+            "--session",
+            "--dest",
+            "org.freedesktop.portal.Desktop",
+            "--object-path",
+            "/org/freedesktop/portal/desktop",
+            "--method",
+            "org.freedesktop.portal.Settings.ReadOne",
+            "org.freedesktop.appearance",
+            "color-scheme",
+        ])
+        .output()
+        .ok()?;
+    // Contesta «(<uint32 1>,)»; el 0 es «sin preferencia» y no es respuesta.
+    let texto = String::from_utf8_lossy(&salida.stdout);
+    let n = texto.split("uint32").nth(1)?.trim_start().chars().next()?;
+    match n {
+        '1' => Some("dark".to_string()),
+        '2' => Some("light".to_string()),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 fn detect_system_theme() -> String {
+    if let Some(tema) = portal_color_scheme() {
+        return tema;
+    }
     // Try KDE plasma color scheme
     if let Ok(out) = std::process::Command::new("kreadconfig5")
         .args(["--group", "General", "--key", "ColorScheme"])
@@ -438,6 +493,34 @@ async fn mpris_favorite(path: String, value: bool) -> Result<(), String> {
     m.publish_favorite(&path, value).await.map_err(|e| e.to_string())
 }
 
+/// Quita el zoom de página que WebKitGTK hace con el pellizco del touchpad.
+///
+/// No hay ajuste para eso ni en WebKit ni en Tauri, y la página no se entera:
+/// el pellizco lo consume un `GtkGestureZoom` de la propia vista y llega como
+/// `setMagnification`, no como `wheel` ni `touch*`, así que ningún
+/// `preventDefault` lo frena. Se apaga ese gesto y ningún otro: con fase `None`
+/// GTK deja de pasarle eventos (gtkeventcontroller.c, 3.24). Va en
+/// `on_page_load` para cubrir también las ventanas que se abran después.
+fn desactivar_zoom_por_pellizco<R: tauri::Runtime>(
+    webview: &tauri::Webview<R>,
+    _: &tauri::webview::PageLoadPayload<'_>,
+) {
+    #[cfg(target_os = "linux")]
+    let _ = webview.with_webview(|webview| {
+        use gtk::glib::translate::from_glib_none;
+        use gtk::prelude::*;
+
+        // WebKitGTK guarda ahí el gesto (WebKitWebViewBase.cpp, 2.52.5). No es
+        // API pública: si la clave cambia, no se encuentra y el zoom vuelve.
+        // Lo guardado es un puntero C a un GObject, no un tipo de Rust.
+        let Some(gesto) = (unsafe { webview.inner().data::<gtk::ffi::GtkGesture>("wk-view-zoom-gesture") }) else {
+            return;
+        };
+        let gesto: gtk::Gesture = unsafe { from_glib_none(gesto.as_ptr()) };
+        gesto.set_propagation_phase(gtk::PropagationPhase::None);
+    });
+}
+
 fn main() {
     log::set_logger(&LOGGER).ok();
     log::set_max_level(log::LevelFilter::Debug);
@@ -458,6 +541,7 @@ fn main() {
     }
 
     tauri::Builder::default()
+        .on_page_load(desactivar_zoom_por_pellizco)
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![

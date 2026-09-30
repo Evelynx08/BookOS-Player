@@ -1,6 +1,6 @@
 [package]
 name = "bookos-player"
-version = "0.6.1"
+version = "0.6.2"
 description = "BookOS Music Player"
 authors = ["BookOS"]
 edition = "2021"
@@ -25,6 +25,11 @@ log = "0.4"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["sync"] }
 futures-util = "0.3"
+
+# Para apagar el zoom por pellizco de WebKitGTK (ver main.rs). Es la misma
+# versión que ya arrastra tauri: no añade nada al árbol, solo la hace visible.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
 
 [features]
 default = ["custom-protocol"]
